@@ -4,7 +4,11 @@
 
 Instead of generic autocomplete, it reads what tabs you have open, your recent browsing history, and your current research thread to suggest completions that actually make sense for what you're doing right now.
 
-<img width="494" height="179" alt="image" src="https://github.com/user-attachments/assets/f8ebcb64-0988-4099-bdbd-767dcd84cc9b" />
+
+
+
+https://github.com/user-attachments/assets/7f69d30d-5a3a-4de2-8855-96cf82afd425
+
 
 
 
