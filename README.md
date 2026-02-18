@@ -1,9 +1,10 @@
-# AI Context Assistant
+# SuggestPilot AI Context Assistant
 
 **A Chrome extension that generates intelligent, context-aware autocomplete suggestions as you type — powered by Groq's free LLM API.**
 
 Instead of generic autocomplete, it reads what tabs you have open, your recent browsing history, and your current research thread to suggest completions that actually make sense for what you're doing right now.
 
+<img width="494" height="179" alt="image" src="https://github.com/user-attachments/assets/f8ebcb64-0988-4099-bdbd-767dcd84cc9b" />
 
 
 
