@@ -2,7 +2,7 @@
 
 **Last updated: February 2026**
 
-SuggestPilot a free, open source Chrome extension. This policy explains what data the extension accesses, how it is used, and what never happens to it.
+SuggestPilot is a free, open source Chrome extension. This policy explains what data the extension accesses, how it is used, and what never happens to it.
 
 ---
 
