@@ -105,22 +105,12 @@ If you have a suggestion or want to blacklist more domains. Flag it on issues ta
 - **No data leaves your browser** except the minimal prompt sent to Groq for inference
 - **No analytics, no tracking, no external servers** beyond the Groq API
 - Browsing history is read locally and never stored outside `chrome.storage.local`
-- Sensitive fields (password, credit card, CVV, SSN, bank, PIN, OTP, tokens) are detected and silently skipped — the overlay never appears on them
+- Sensitive fields (password, credit card, CVV, SSN, bank, PIN, OTP, tokens) are silently skipped — the overlay never appears on them
 - Session data is stored locally and auto-expires after 30 minutes of inactivity
 - All data is cleared when you click **Clear All Data** in settings
 
 The Groq API prompt contains tab titles and recent page titles from your browser. If you're concerned about this, you can disable **Tab Analysis** and **History Tracking** in settings — suggestions will still work but will be less contextual.
 
-## Privacy
-
-- **No data leaves your browser** except the minimal prompt sent to Groq for inference
-- **No analytics, no tracking, no external servers** beyond the Groq API
-- Browsing history is read locally and never stored outside `chrome.storage.local`
-- Sensitive fields (password, credit card, CVV, SSN, bank, PIN, OTP, tokens) are silently skipped and not collected the overlay never appears on them
-- Session data is stored locally and auto-expires after 30 minutes of inactivity
-- All data is cleared when you click **Clear All Data** in settings
-
-The Groq API prompt contains tab titles and recent page titles from your browser. If you're concerned about this, you can disable **Tab Analysis** and **History Tracking** in settings — suggestions will still work but will be less contextual.
 
 ## Contributing
 
