@@ -127,6 +127,72 @@ Pull requests are welcome. A few areas that would make a meaningful difference:
 - **Firefox support** — the extension uses Chrome-specific APIs (`chrome.history`, `chrome.tabs`). A Firefox-compatible manifest v2 port would broaden reach.
 - **Tests** — there are none. Unit tests for `session-tracker.js`, `form-detector.js`, and `groq-service.js` parsing logic would be a good place to start.
 
+  
+## How to Contribute (Branch & Pull Request Workflow)
+
+If you'd like to contribute code, please follow this workflow.
+
+### 1. Fork the Repository
+
+Click **Fork** on GitHub to create your own copy of the repository.
+
+
+### 2. Clone Your Fork
+
+```bash
+git clone https://github.com/YOUR-USERNAME/SuggestPilot.git
+cd SuggestPilot
+```
+
+
+### 3. Create a New Branch
+
+Always create a new branch from `main`.  
+Never commit directly to `main`.
+
+```bash
+git checkout -b feature/short-description
+```
+
+Examples:
+
+- `feature/add-timezone-field`
+- `fix/session-expiry-logic`
+- `refactor/prompt-builder`
+- `docs/improve-readme`
+
+Keep branches small and focused on one change.
+
+
+### 4. Make Your Changes
+
+Before submitting:
+
+- Test locally via `chrome://extensions`
+- Ensure there are no console errors
+- Confirm suggestions still return valid JSON
+- Make sure typing latency is not degraded
+- Verify no sensitive fields are exposed
+
+
+### 5. Commit Clearly
+
+Use clear, descriptive commit messages
+
+### 6. Push Your Branch
+
+```bash
+git push origin feature/short-description
+```
+
+---
+
+### 7. Open a Pull Request
+
+Go to your fork on GitHub and click **Compare & pull request**.
+
+If changes are requested, update your branch and push again — the PR will update automatically.
+
 ## Acknowledgements
 
 - [Groq](https://groq.com) for the free, fast inference API
