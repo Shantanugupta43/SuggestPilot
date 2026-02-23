@@ -53,7 +53,7 @@ class FormDetector {
     if (/(^|\W)(first[_\s-]?name|fname|given[_\s-]?name)(\W|$)/.test(combined)) return 'first_name';
     if (/(^|\W)(last[_\s-]?name|lname|family[_\s-]?name|surname)(\W|$)/.test(combined)) return 'last_name';
     if (/(^|\W)(full[_\s-]?name|your[_\s-]?name|name)(\W|$)/.test(combined)) return 'full_name';
-    if (/(email|e-mail|mail)/.test(combined)) return 'email';
+    if (/(email|e-mail|mail)/.test(combined)) return 'sensitive';
 
     // ── Professional ────────────────────────────────────────────────────────
     if (/(job[_\s-]?title|position|role|designation|occupation)/.test(combined)) return 'job_title';

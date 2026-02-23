@@ -539,7 +539,7 @@
     const tagName = element.tagName?.toLowerCase();
     const type = element.type?.toLowerCase();
     if (tagName === 'textarea') return true;
-    if (tagName === 'input' && (type === 'text' || type === 'search' || type === 'email' || type === 'url' || !type)) return true;
+    if (tagName === 'input' && (type === 'text' || type === 'search' || type === 'url' || !type)) return true;
     if (element.contentEditable === 'true') return true;
     if (element.getAttribute('role') === 'textbox') return true;
     return false;
@@ -548,7 +548,7 @@
   function isSensitiveField(element) {
     if (!element) return false;
     const type = element.type?.toLowerCase();
-    if (type === 'password' || type === 'tel' || type === 'number') return true;
+    if (type === 'password' || type === 'tel' || type === 'number' || type === 'email') return true;
     const combinedText = `${element.name} ${element.id} ${element.autocomplete} ${element.placeholder}`.toLowerCase();
     return ['password', 'passwd', 'credit', 'card', 'cvv', 'ssn', 'bank', 'pin', 'token', 'auth', 'login', 'otp', 'verification'].some(k => combinedText.includes(k));
   }

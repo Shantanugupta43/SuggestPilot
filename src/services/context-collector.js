@@ -301,7 +301,8 @@ class ContextCollector {
       /ssn/i, /social[_\s-]?security/i,
       /bank[_\s-]?account/i, /account[_\s-]?number/i,
       /cvv/i, /cvc/i, /pin/i,
-      /api[_\s-]?key/i, /token/i
+      /api[_\s-]?key/i, /token/i,
+      /email/i, /e-mail/i
     ];
 
     const combinedText = `${text} ${fieldName}`.toLowerCase();
