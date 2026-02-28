@@ -1,0 +1,124 @@
+name: Update Contributors
+
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  update-contributors:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update contributors in README
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+
+            // Fetch all merged PRs
+            const pulls = await github.paginate(github.rest.pulls.list, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'closed',
+              per_page: 100
+            });
+
+            const mergedPulls = pulls.filter(pr => pr.merged_at !== null);
+
+            // Build contributor map: username -> { avatar_url, pr_count }
+            const contributors = {};
+            for (const pr of mergedPulls) {
+              const login = pr.user.login;
+              // Skip bots
+              if (login.endsWith('[bot]') || pr.user.type === 'Bot') continue;
+              if (!contributors[login]) {
+                contributors[login] = {
+                  avatar_url: pr.user.avatar_url,
+                  pr_count: 0
+                };
+              }
+              contributors[login].pr_count += 1;
+            }
+
+            // Build the contributors table HTML
+            const entries = Object.entries(contributors)
+              .sort((a, b) => b[1].pr_count - a[1].pr_count);
+
+            if (entries.length === 0) {
+              console.log('No contributors found, skipping README update.');
+              return;
+            }
+
+            const cells = entries.map(([login, data]) => {
+              const prLabel = data.pr_count === 1 ? '1 PR' : `${data.pr_count} PRs`;
+              return `    <td align="center">
+              <a href="https://github.com/${login}">
+                <img src="${data.avatar_url}&s=80" width="80px;" alt="${login}"/><br />
+                <sub><b>@${login}</b></sub><br />
+                <sub>${prLabel} merged</sub>
+              </a>
+            </td>`;
+            });
+
+            // Group into rows of 6
+            const rows = [];
+            for (let i = 0; i < cells.length; i += 6) {
+              rows.push(`  <tr>\n${cells.slice(i, i + 6).join('\n')}\n  </tr>`);
+            }
+
+            const table = `<table>\n${rows.join('\n')}\n</table>`;
+
+            const block = `## 🙌 Contributors
+
+Thanks to everyone who has helped improve SuggestPilot!
+
+<!-- CONTRIBUTORS-START -->
+${table}
+<!-- CONTRIBUTORS-END -->`;
+
+            // Read README
+            let readme = fs.readFileSync('README.md', 'utf8');
+
+            // Replace existing block if present, otherwise insert after target paragraph
+            const startMarker = '<!-- CONTRIBUTORS-START -->';
+            const endMarker = '<!-- CONTRIBUTORS-END -->';
+
+            if (readme.includes(startMarker)) {
+              // Update just the table between markers
+              readme = readme.replace(
+                new RegExp(`${startMarker}[\\s\\S]*?${endMarker}`),
+                `${startMarker}\n${table}\n${endMarker}`
+              );
+            } else {
+              // Insert the full block after the target paragraph
+              const insertAfter = "Nothing leaves your device except the suggestion request to Groq's API — your history is never stored or shared.";
+              if (readme.includes(insertAfter)) {
+                readme = readme.replace(
+                  insertAfter,
+                  `${insertAfter}\n\n---\n\n${block}\n\n---`
+                );
+              } else {
+                console.log('Target paragraph not found in README. Appending to end.');
+                readme += `\n\n---\n\n${block}\n\n---\n`;
+              }
+            }
+
+            fs.writeFileSync('README.md', readme);
+            console.log(`Updated contributors: ${entries.map(([l]) => l).join(', ')}`);
+
+      - name: Commit updated README
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          git diff --staged --quiet || git commit -m "docs: update contributors table [skip ci]"
+          git push

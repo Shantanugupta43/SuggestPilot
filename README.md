@@ -3,7 +3,23 @@
 **A Chrome extension that generates intelligent, context-aware autocomplete suggestions as you type — powered by Groq's free LLM API.**
 
 
-Instead of generic autocomplete, SuggestPilot reads your open tabs and recent browsing history locally in your browser to suggest smarter completions. Nothing leaves your device except the suggestion request to Groq's API — your history is never stored or shared.
+## 🙌 Contributors
+
+Thanks to everyone who has helped improve SuggestPilot!
+
+<!-- CONTRIBUTORS-START -->
+<table>
+  <tr>
+    <td align="center">
+      <a href="https://github.com/debugomega-cell">
+        <img src="https://github.com/debugomega-cell.png&s=80" width="80px;" alt="debugomega-cell"/><br />
+        <sub><b>@debugomega-cell</b></sub><br />
+        <sub>1 PR merged</sub>
+      </a>
+    </td>
+  </tr>
+</table>
+<!-- CONTRIBUTORS-END -->
 
 
 
