@@ -4,6 +4,19 @@
 
 Instead of generic autocomplete, it reads what tabs you have open, your recent browsing history, and your current research thread to suggest completions that actually make sense for what you're doing right now.
 
+Thanks to everyone who has helped improve SuggestPilot!
+
+<table>
+  <tr>
+    <td align="center">
+      <a href="https://github.com/debugomega-cell">
+        <img src="https://github.com/debugomega-cell.png" width="80px;" alt="debugomega-cell"/><br />
+        <sub><b>@debugomega-cell</b></sub>
+      </a>
+    </td>
+  </tr>
+</table>
+
 
 
 
