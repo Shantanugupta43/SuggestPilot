@@ -11,8 +11,15 @@ Thanks to everyone who has helped improve SuggestPilot!
 <table>
   <tr>
     <td align="center">
+      <a href="https://github.com/Shantanugupta43">
+        <img src="https://avatars.githubusercontent.com/u/99300527?v=4" width="80px;" alt="Shantanugupta43"/><br />
+        <sub><b>@Shantanugupta43</b></sub><br />
+        <sub>10 PRs merged</sub>
+      </a>
+    </td>
+    <td align="center">
       <a href="https://github.com/Utkarsh-rwt">
-<img src="https://github.com/Utkarsh-rwt.png" width="80px;" alt="utkarsh-rwt"/><br />
+        <img src="https://avatars.githubusercontent.com/u/241274883?v=4" width="80px;" alt="Utkarsh-rwt"/><br />
         <sub><b>@Utkarsh-rwt</b></sub><br />
         <sub>1 PR merged</sub>
       </a>
