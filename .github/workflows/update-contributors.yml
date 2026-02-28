@@ -62,7 +62,7 @@ jobs:
               const prLabel = data.pr_count === 1 ? '1 PR' : `${data.pr_count} PRs`;
               return `    <td align="center">
               <a href="https://github.com/${login}">
-                <img src="${data.avatar_url}&s=80" width="80px;" alt="${login}"/><br />
+                <img src="${data.avatar_url}" width="80px;" alt="${login}"/><br />
                 <sub><b>@${login}</b></sub><br />
                 <sub>${prLabel} merged</sub>
               </a>
