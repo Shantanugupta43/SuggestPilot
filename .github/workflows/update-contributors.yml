@@ -114,6 +114,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin main
           BRANCH="update-contributors-${{ github.run_id }}"
           git checkout -b "$BRANCH"
           git add README.md
