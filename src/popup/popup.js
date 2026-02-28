@@ -305,6 +305,40 @@ async function toggleExtension() {
 }
 
 /**
+ * dark mode toggle
+ *  */ 
+
+const sign = document.getElementById('text');
+const outer = document.getElementById("outerbox");
+const inner = document.getElementById("innerbox");
+const text =document.getElementById("darkmode")
+
+function changeText() {
+  if (sign.textContent == "X") {
+    sign.textContent = "✔";
+    outer.classList.toggle("active");
+    inner.classList.toggle("active");
+    document.body.classList.add('dark');
+    text.classList.toggle("active");
+    
+
+  } else {
+    sign.textContent = "X";
+    outer.classList.toggle("active");
+    inner.classList.toggle("active");
+    document.body.classList.remove('dark');
+     text.classList.toggle("active");
+  }
+}
+
+outer.addEventListener('click', changeText);
+
+
+
+
+
+
+/**
  * Update toggle status text
  */
 function updateToggleStatus() {
