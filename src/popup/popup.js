@@ -41,7 +41,7 @@ const elements = {
 };
 
 // State
-let currentConfig = null;
+let currentConfig = { isConfigured: false, model: "llama-3.1-8b-instant", enableHistoryTracking: true, enableTabAnalysis: true, enableAiChatMode: true };
 let currentSuggestions = null;
 let extensionEnabled = true;
 
@@ -49,18 +49,24 @@ let extensionEnabled = true;
  * Initialize popup
  */
 async function initialize() {
-  await loadConfig();
-  await loadExtensionState();
-  setupEventListeners();
-  
-  if (currentConfig.isConfigured) {
-    showView('main');
-    if (extensionEnabled) {
-      await loadSuggestions();
+  try {
+    await loadConfig();
+    await loadExtensionState();
+    setupEventListeners();
+
+    if (currentConfig && currentConfig.isConfigured) {
+      showView('main');
+      if (extensionEnabled) {
+        await loadSuggestions();
+      } else {
+        showDisabledState();
+      }
     } else {
-      showDisabledState();
+      showView('notConfigured');
     }
-  } else {
+  } catch (error) {
+    // Last-resort catch: always show notConfigured rather than blank popup
+    console.error('Initialization error:', error);
     showView('notConfigured');
   }
 }
@@ -74,13 +80,14 @@ async function loadConfig() {
       action: 'getConfig' 
     });
     
-    if (response.success) {
+    if (response && response.success && response.config) {
       currentConfig = response.config;
       populateSettings();
     }
+    // If response.success is false or config missing, keep the safe default
   } catch (error) {
     console.error('Failed to load config:', error);
-    showStatus('Failed to load configuration', 'error');
+    // Keep safe default — do NOT show error here, initialize() will show notConfigured
   }
 }
 
@@ -395,15 +402,15 @@ async function testConnection() {
     elements.connectionStatus.classList.remove('hidden');
     
     if (response.success) {
-      elements.connectionStatus.textContent = 'âœ“ Connection successful';
+      elements.connectionStatus.textContent = '✔ Connection successful';
       elements.connectionStatus.className = 'connection-status success';
     } else {
-      elements.connectionStatus.textContent = 'âœ— Connection failed';
+      elements.connectionStatus.textContent = '✗ Connection failed';
       elements.connectionStatus.className = 'connection-status error';
     }
   } catch (error) {
     elements.connectionStatus.classList.remove('hidden');
-    elements.connectionStatus.textContent = 'âœ— Connection failed: ' + error.message;
+    elements.connectionStatus.textContent = '✗ Connection failed: ' + error.message;
     elements.connectionStatus.className = 'connection-status error';
   } finally {
     elements.testConnectionBtn.disabled = false;

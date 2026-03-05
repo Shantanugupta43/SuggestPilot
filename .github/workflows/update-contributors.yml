@@ -17,13 +17,13 @@ jobs:
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: true
 
       - name: Update contributors in README
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
-
             // Fetch all merged PRs
             const pulls = await github.paginate(github.rest.pulls.list, {
               owner: context.repo.owner,
@@ -31,9 +31,7 @@ jobs:
               state: 'closed',
               per_page: 100
             });
-
             const mergedPulls = pulls.filter(pr => pr.merged_at !== null);
-
             // Build contributor map: username -> { avatar_url, pr_count }
             const contributors = {};
             for (const pr of mergedPulls) {
@@ -47,16 +45,13 @@ jobs:
               }
               contributors[login].pr_count += 1;
             }
-
             // Build the contributors table HTML
             const entries = Object.entries(contributors)
               .sort((a, b) => b[1].pr_count - a[1].pr_count);
-
             if (entries.length === 0) {
               console.log('No contributors found, skipping README update.');
               return;
             }
-
             const cells = entries.map(([login, data]) => {
               const prLabel = data.pr_count === 1 ? '1 PR' : data.pr_count + ' PRs';
               return '    <td align="center">\n'
@@ -67,27 +62,21 @@ jobs:
                 + '      </a>\n'
                 + '    </td>';
             });
-
             // Group into rows of 6
             const rows = [];
             for (let i = 0; i < cells.length; i += 6) {
               rows.push('  <tr>\n' + cells.slice(i, i + 6).join('\n') + '\n  </tr>');
             }
-
             const table = '<table>\n' + rows.join('\n') + '\n</table>';
-
             const block = '## 🙌 Contributors\n\n'
               + 'Thanks to everyone who has helped improve SuggestPilot!\n\n'
               + '<!-- CONTRIBUTORS-START -->\n'
               + table + '\n'
               + '<!-- CONTRIBUTORS-END -->';
-
             // Read README
             let readme = fs.readFileSync('README.md', 'utf8');
-
             const startMarker = '<!-- CONTRIBUTORS-START -->';
             const endMarker = '<!-- CONTRIBUTORS-END -->';
-
             if (readme.includes(startMarker)) {
               const pattern = startMarker + '[\\s\\S]*?' + endMarker;
               readme = readme.replace(
@@ -106,7 +95,6 @@ jobs:
                 readme += '\n\n---\n\n' + block + '\n\n---\n';
               }
             }
-
             fs.writeFileSync('README.md', readme);
             console.log('Updated contributors: ' + entries.map(([l]) => l).join(', '));
 
@@ -124,7 +112,7 @@ jobs:
             echo "No changes to commit, skipping PR."
           else
             git commit -m "docs: update contributors table [skip ci]"
-            git push origin "$BRANCH"
+            git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }} "$BRANCH"
             gh pr create \
               --title "docs: update contributors table" \
               --body "Automated contributors table update triggered by merge of #${{ github.event.pull_request.number }}." \
