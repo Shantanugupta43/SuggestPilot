@@ -16,12 +16,18 @@ class GroqService {
     try {
       const apiKey = configManager.getApiKey();
 
-      // ── Form-fill mode: structured candidates, no AI needed ────────────────
-      if (context.fieldMeta?.isFormFill && context.fieldMeta.candidates?.length > 0) {
+      // ── Form-fill mode:
+      const skipAiTypes = new Set(['os', 'browser', 'linkedin_url', 'github_url', 'version']);
+      const hasReadyCandidates =
+        context.fieldMeta?.candidates?.length > 0 &&
+        (skipAiTypes.has(context.fieldMeta.fieldType) ||
+          context.fieldMeta.candidates.every(c => c.confidence >= 0.9));
+
+      if (hasReadyCandidates) {
         return this._buildFormFillResponse(context.fieldMeta);
       }
 
-      // ── Form field detected but no local candidates → ask AI ───────────────
+      // ── Form field detected but needs AI to generate/augment suggestions ───
       const prompt = context.fieldMeta?.fieldType
         ? this.buildFormFieldPrompt(context)
         : this.buildContextAwarePrompt(context);
@@ -148,7 +154,19 @@ class GroqService {
       `CURRENT_VALUE:"${currentValue}"`
     ];
 
-    // Include tabs/session for professional fields
+    // If we already have some tab-based candidates, pass them as hints
+    if (context.fieldMeta?.candidates?.length > 0) {
+      const hints = context.fieldMeta.candidates
+        .map(c => `"${c.value}" (from ${c.source})`)
+        .join(', ');
+      parts.push(`KNOWN_VALUES:${hints}`);
+    }
+
+    // Include page context for issue_subject
+    if (context.fieldMeta?.pageTitle) {
+      parts.push(`PAGE_TITLE:"${context.fieldMeta.pageTitle.slice(0, 80)}"`);
+    }
+
     if (context.sessionIntent?.sessionSummary) {
       parts.push(`SESSION:${context.sessionIntent.sessionSummary}`);
     }

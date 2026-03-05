@@ -1,147 +1,191 @@
 /**
- * Background Service Worker - Groq Cloud Edition
- * + Session Intent Tracking
- * + Smart Form-Fill Suggestions
+ * Session Tracker
+ * Tracks the user's research intent across queries within a browsing session.
+ * Builds a rolling summary and recent thread used by groq-service to produce
+ * context-aware, session-continuity suggestions.
+ *
+ * Storage key: 'sessionIntent'
+ * Shape: { queries: [{text, suggestions, timestamp}], sessionSummary: string, recentThread: string, startedAt: number }
+ *
+ * Public API (all async):
+ *   recordQuery(queryText, suggestions)  → void
+ *   getIntentContext()                   → { sessionSummary, recentThread }
+ *   clearSession()                       → void
  */
 
-import configManager from '../config/config-manager.js';
-import groqService from '../services/groq-service.js';
-import contextCollector from '../services/context-collector.js';
-import sessionTracker from '../services/session-tracker.js';
-
-chrome.runtime.onInstalled.addListener(async () => {
-  console.log('AI Context Assistant installed');
-  await configManager.initialize();
-  chrome.action.setBadgeText({ text: '' });
-  chrome.action.setBadgeBackgroundColor({ color: '#4A90E2' });
-});
-
-chrome.runtime.onStartup.addListener(async () => {
-  await configManager.initialize();
-});
-
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  handleMessage(request, sender)
-    .then(sendResponse)
-    .catch(error => {
-      console.error('Message error:', error);
-      sendResponse({ success: false, error: error.message });
-    });
-  return true;
-});
-
-async function handleMessage(request, sender) {
-  const { action, data } = request;
-
-  switch (action) {
-    case 'generateSuggestions':
-      return await generateSuggestions(data);
-
-    case 'getConfig':
-      await configManager.initialize();
-      return {
-        success: true,
-        config: {
-          isConfigured: configManager.isConfigured(),
-          model: configManager.get('model'),
-          enableHistoryTracking: configManager.get('enableHistoryTracking'),
-          enableTabAnalysis: configManager.get('enableTabAnalysis'),
-          enableAiChatMode: configManager.get('enableAiChatMode')
-        }
-      };
-
-    case 'setApiKey':
-      await configManager.initialize();
-      await configManager.setApiKey(data.apiKey);
-      return { success: true };
-
-    case 'updateConfig':
-      await configManager.initialize();
-      await configManager.update(data.updates);
-      return { success: true };
-
-    case 'testConnection':
-      await configManager.initialize();
-      const isConnected = await groqService.testConnection();
-      return { success: isConnected };
-
-    case 'clearConfig':
-      await configManager.clear();
-      await sessionTracker.clearSession();
-      return { success: true };
-
-    case 'getSessionIntent':
-      return { success: true, intent: await sessionTracker.getIntentContext() };
-
-    default:
-      throw new Error(`Unknown action: ${action}`);
+class SessionTracker {
+  constructor() {
+    this.STORAGE_KEY = 'sessionIntent';
+    // Session expires after 2 hours of inactivity
+    this.SESSION_TTL_MS = 2 * 60 * 60 * 1000;
+    // Keep at most this many queries in the rolling window
+    this.MAX_QUERIES = 20;
+    // Rebuild the summary after this many new queries
+    this.SUMMARY_REBUILD_INTERVAL = 5;
   }
-}
 
-async function generateSuggestions(data) {
-  try {
-    // Check if extension is enabled
-    const stored = await chrome.storage.local.get('extensionEnabled');
-    const extensionEnabled = stored.extensionEnabled ?? true;
+  // ── Public API ──────────────────────────────────────────────────────────────
 
-    if (!extensionEnabled) {
-      return { success: true, reason: 'Extension is disabled', suggestions: [] };
+  /**
+   * Record a new query into the session and update the intent summary.
+   * @param {string} queryText
+   * @param {Array}  suggestions  - the suggestions returned for this query (stored for future context)
+   */
+  async recordQuery(queryText, suggestions = []) {
+    if (!queryText || typeof queryText !== 'string') return;
+    const text = queryText.trim();
+    if (text.length < 2) return;
+
+    try {
+      const session = await this._loadSession();
+
+      session.queries.push({
+        text,
+        suggestions: (suggestions || []).slice(0, 3).map(s =>
+          typeof s === 'string' ? s : (s.text || '')
+        ),
+        timestamp: Date.now()
+      });
+
+      // Keep rolling window
+      if (session.queries.length > this.MAX_QUERIES) {
+        session.queries = session.queries.slice(-this.MAX_QUERIES);
+      }
+
+      // Rebuild the human-readable thread and summary
+      session.recentThread = this._buildRecentThread(session.queries);
+      session.sessionSummary = this._buildSessionSummary(session.queries);
+      session.updatedAt = Date.now();
+
+      await this._saveSession(session);
+    } catch (error) {
+      console.error('SessionTracker.recordQuery error:', error);
     }
+  }
 
-    if (!configManager.initialized) {
-      await configManager.initialize();
+  /**
+   * Return the intent context object expected by groq-service.
+   * @returns {{ sessionSummary: string, recentThread: string }}
+   */
+  async getIntentContext() {
+    try {
+      const session = await this._loadSession();
+      return {
+        sessionSummary: session.sessionSummary || '',
+        recentThread: session.recentThread || ''
+      };
+    } catch (error) {
+      console.error('SessionTracker.getIntentContext error:', error);
+      return { sessionSummary: '', recentThread: '' };
     }
+  }
 
-    if (!configManager.isConfigured()) {
-      return { success: false, error: 'Groq API key not configured', suggestions: [] };
+  /**
+   * Wipe the stored session.
+   */
+  async clearSession() {
+    try {
+      await chrome.storage.local.remove(this.STORAGE_KEY);
+    } catch (error) {
+      console.error('SessionTracker.clearSession error:', error);
     }
+  }
 
-    const fullContext = await contextCollector.collectContext();
+  // ── Private helpers ─────────────────────────────────────────────────────────
 
-    const mergedContext = {
-      ...fullContext,
-      active_input_text: data.context?.active_input_text || fullContext.active_input_text,
-      page_type: data.context?.page_type || fullContext.page_type,
-      current_page: { ...fullContext.current_page, ...(data.context?.current_page || {}) },
-      // ── New: form field metadata from content script ─────────────────────
-      fieldMeta: data.fieldMeta || null,
-      // ── New: session intent thread ───────────────────────────────────────
-      sessionIntent: await sessionTracker.getIntentContext()
+  /**
+   * Load session from storage, creating a fresh one if missing or expired.
+   */
+  async _loadSession() {
+    try {
+      const stored = await chrome.storage.local.get(this.STORAGE_KEY);
+      const session = stored[this.STORAGE_KEY];
+
+      if (!session || !session.startedAt) {
+        return this._freshSession();
+      }
+
+      // Expire stale sessions
+      const age = Date.now() - (session.updatedAt || session.startedAt);
+      if (age > this.SESSION_TTL_MS) {
+        return this._freshSession();
+      }
+
+      // Ensure required fields exist (backwards compat)
+      return {
+        queries: session.queries || [],
+        sessionSummary: session.sessionSummary || '',
+        recentThread: session.recentThread || '',
+        startedAt: session.startedAt,
+        updatedAt: session.updatedAt || session.startedAt
+      };
+    } catch (error) {
+      return this._freshSession();
+    }
+  }
+
+  async _saveSession(session) {
+    await chrome.storage.local.set({ [this.STORAGE_KEY]: session });
+  }
+
+  _freshSession() {
+    return {
+      queries: [],
+      sessionSummary: '',
+      recentThread: '',
+      startedAt: Date.now(),
+      updatedAt: Date.now()
     };
+  }
 
-    if (mergedContext.active_input_text && data.fieldName) {
-      if (contextCollector.isSensitiveInput(mergedContext.active_input_text, data.fieldName)) {
-        return { success: true, reason: 'Sensitive input detected', suggestions: [] };
+  /**
+   * Build a short readable string of the last 5 query texts.
+   * Used as THREAD: in the groq prompt.
+   * Example: "react hooks → useEffect cleanup → memory leaks in react"
+   */
+  _buildRecentThread(queries) {
+    return queries
+      .slice(-5)
+      .map(q => q.text.slice(0, 60))
+      .join(' → ');
+  }
+
+  /**
+   * Build a one-line summary of what the user is researching this session.
+   * Uses simple keyword frequency — no API call needed.
+   * Example: "Researching: react, hooks, performance, useEffect"
+   */
+  _buildSessionSummary(queries) {
+    if (queries.length === 0) return '';
+
+    // Collect all words, strip noise, count frequency
+    const stopWords = new Set([
+      'the', 'a', 'an', 'is', 'in', 'on', 'at', 'to', 'for', 'of', 'and',
+      'or', 'how', 'what', 'why', 'when', 'where', 'do', 'does', 'can',
+      'i', 'my', 'me', 'with', 'vs', 'vs.', 'between', 'difference',
+      'best', 'good', 'new', 'using', 'use', 'get', 'will', 'it', 'this',
+      'that', 'from', 'about', 'into', 'are', 'be', 'not', 'no', 'without'
+    ]);
+
+    const freq = {};
+    for (const q of queries) {
+      const words = q.text.toLowerCase().match(/\b[a-z][a-z0-9+#.]{1,20}\b/g) || [];
+      for (const word of words) {
+        if (!stopWords.has(word)) {
+          freq[word] = (freq[word] || 0) + 1;
+        }
       }
     }
 
-    const result = await groqService.generateSuggestions(mergedContext);
+    const topKeywords = Object.entries(freq)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6)
+      .map(([word]) => word);
 
-    // Record the query into the session tracker AFTER generating suggestions
-    if (mergedContext.active_input_text) {
-      await sessionTracker.recordQuery(mergedContext.active_input_text, result.suggestions);
-    }
-
-    if (configManager.get('enableHistoryTracking') && mergedContext.active_input_text) {
-      await storePastSearch(mergedContext.active_input_text, result.suggestions);
-    }
-
-    return { success: true, ...result };
-  } catch (error) {
-    console.error('Error:', error);
-    return { success: false, error: error.message, suggestions: [] };
+    if (topKeywords.length === 0) return '';
+    return `Researching: ${topKeywords.join(', ')}`;
   }
 }
 
-async function storePastSearch(query, suggestions) {
-  try {
-    const stored = await chrome.storage.local.get('pastSearches');
-    const pastSearches = stored.pastSearches || [];
-    pastSearches.unshift({ query, suggestions, timestamp: Date.now() });
-    await chrome.storage.local.set({ pastSearches: pastSearches.slice(0, 50) });
-  } catch (error) {
-    console.error('Storage error:', error);
-  }
-}
-
-console.log('Service worker loaded - Groq Cloud Edition + Session Tracking + Form Fill');
+const sessionTracker = new SessionTracker();
+export default sessionTracker;

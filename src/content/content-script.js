@@ -22,17 +22,22 @@
 
   // ── Form-fill detector (inline, no import needed in content scripts) ────────
   const FORM_FIELD_PATTERNS = {
-    sensitive: ['password', 'passwd', 'pwd', 'credit', 'card', 'cvv', 'cvc', 'ssn', 'bank', 'pin', 'otp', 'auth', 'token', 'secret'],
-    job_title: ['job_title', 'jobtitle', 'position', 'role', 'designation', 'occupation', 'title'],
-    company:   ['company', 'employer', 'organisation', 'organization', 'workplace', 'firm'],
-    os:        ['operating_system', 'operatingsystem', 'platform', ' os '],
-    browser:   ['browser', 'useragent', 'user_agent'],
-    version:   ['version', 'appversion', 'softwareversion'],
-    skills:    ['skill', 'expertise', 'technology', 'techstack', 'languages', 'tools'],
+    // Sensitive must be checked 
+    sensitive: ['password', 'passwd', 'pwd', 'credit', 'card', 'cvv', 'cvc', 'ssn', 'bank', 'pin', 'otp', 'auth', 'token', 'secret', 'email', 'e_mail', 'mail'],
+    job_title: ['job_title', 'jobtitle', 'position', 'role', 'designation', 'occupation', 'job_role'],
+    // 'title' alone is too broad (page titles, article titles etc.) — only match when combined
+    company:   ['company', 'employer', 'organisation', 'organization', 'workplace', 'firm', 'companyname'],
+    // ' os ' with spaces won't match after space→_ normalization; use '_os_', 'os_name', or standalone 'os' at word boundary
+    os:        ['operating_system', 'operatingsystem', '_os_', 'os_name', 'your_os', 'platform'],
+    browser:   ['browser', 'useragent', 'user_agent', 'browsername'],
+    version:   ['version', 'app_version', 'appversion', 'software_version', 'softwareversion'],
+    skills:    ['skill', 'expertise', 'technology', 'tech_stack', 'techstack', 'languages', 'tools'],
     linkedin_url: ['linkedin'],
     github_url:   ['github'],
-    issue_subject:  ['subject', 'issuetitle', 'tickettitle', 'summary'],
-    issue_description: ['description', 'details', 'body', 'message', 'explain', 'steps']
+    website:      ['website', 'portfolio', 'personal_site', 'homepage', 'personal_url'],
+    experience_years: ['years_of_exp', 'yearsofexp', 'experience_years', 'yoe', 'years_experience'],
+    issue_subject:     ['subject', 'issue_title', 'issuetitle', 'ticket_title', 'tickettitle', 'summary'],
+    issue_description: ['description', 'details', 'body', 'explain', 'steps_to_reproduce', 'reproduce']
   };
 
   function classifyField(element) {
@@ -44,11 +49,20 @@
       element.type
     ].join(' ').toLowerCase().replace(/[-\s]/g, '_');
 
+    // Always block sensitive types first
+    if (element.type === 'password' || element.type === 'email' || element.type === 'tel') return null;
+
+    // Iterate patterns — sensitive must be first entry in the object to act as a gate
     for (const [type, keywords] of Object.entries(FORM_FIELD_PATTERNS)) {
-      if (keywords.some(k => combined.includes(k.replace(/[-\s]/g, '_')))) {
+      const normalizedKeywords = keywords.map(k => k.replace(/[-\s]/g, '_'));
+      if (normalizedKeywords.some(k => combined.includes(k))) {
         return type === 'sensitive' ? null : type;
       }
     }
+
+    // Special case: bare 'os' as a whole word (e.g. name="os", id="os")
+    if (/(?:^|_)os(?:_|$)/.test(combined)) return 'os';
+
     return null;
   }
 
@@ -75,6 +89,9 @@
 
   /**
    * Build fieldMeta for service worker — includes local candidates where deterministic.
+   * For field types that need open-tab context (job_title, company, etc.),
+   * we still send the fieldType so the service worker / groq-service can use
+   * the form-field prompt rather than the generic search prompt.
    */
   function buildFieldMeta(element) {
     const fieldType = classifyField(element);
@@ -88,21 +105,50 @@
       candidates: []
     };
 
-    // Provide deterministic local candidates (no AI needed)
+    // ── Deterministic local candidates (device info — no tabs needed) ────────
     if (fieldType === 'os') {
       const os = detectOS();
-      if (os) { meta.candidates.push({ value: os, source: 'Your device', confidence: 1.0 }); meta.isFormFill = true; }
+      if (os) {
+        meta.candidates.push({ value: os, source: 'Your device', confidence: 1.0 });
+        meta.isFormFill = true;
+      }
     }
+
     if (fieldType === 'browser') {
       const browser = detectBrowser();
-      if (browser) { meta.candidates.push({ value: browser, source: 'Your device', confidence: 1.0 }); meta.isFormFill = true; }
+      if (browser) {
+        meta.candidates.push({ value: browser, source: 'Your device', confidence: 1.0 });
+        meta.isFormFill = true;
+      }
     }
+
     if (fieldType === 'issue_description') {
-      const os = detectOS(); const browser = detectBrowser();
+      const os = detectOS();
+      const browser = detectBrowser();
       if (os && browser) {
         meta.candidates.push({ value: `${os} / ${browser}`, source: 'Your device', confidence: 0.9 });
         meta.isFormFill = true;
       }
+    }
+
+    if (fieldType === 'version') {
+      const browser = detectBrowser();
+      if (browser) {
+        meta.candidates.push({ value: browser, source: 'Your browser version', confidence: 0.8 });
+        meta.isFormFill = true;
+      }
+    }
+
+    // ── Tab-dependent types: mark isFormFill so service-worker uses
+    //    form-fill prompt path, candidates filled in by service worker
+    //    via form-detector using the open tabs it can access ───────────────────
+    const tabDependentTypes = ['job_title', 'company', 'skills', 'linkedin_url', 'github_url', 'website', 'issue_subject', 'experience_years'];
+    if (tabDependentTypes.includes(fieldType)) {
+      // Flag it so groq-service uses the form-field prompt, even if no local candidates
+      meta.isFormFill = true;
+      // pageTitle is available here for issue_subject
+      meta.pageTitle = document.title;
+      meta.pageUrl = window.location.href;
     }
 
     return meta;

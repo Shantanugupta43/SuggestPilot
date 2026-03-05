@@ -15,10 +15,11 @@ class FormDetector {
    *
    * @param {Object} fieldMeta  - {name, id, placeholder, autocomplete, label, type, pageUrl, pageTitle}
    * @param {Object[]} openTabs - Array of {title, url} from context-collector
+   * @param {string|null} preClassifiedType - fieldType already determined by content-script (skip re-classification)
    * @returns {Object|null}
    */
-  analyzeField(fieldMeta, openTabs = []) {
-    const fieldType = this._classifyField(fieldMeta);
+  analyzeField(fieldMeta, openTabs = [], preClassifiedType = null) {
+    const fieldType = preClassifiedType || this._classifyField(fieldMeta);
     if (!fieldType || fieldType === 'sensitive') return null;
 
     const candidates = this._buildCandidates(fieldType, fieldMeta, openTabs);
