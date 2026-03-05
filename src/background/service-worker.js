@@ -103,6 +103,19 @@ async function generateSuggestions(data) {
       }
     }
 
+    // Return deterministic form-fill candidates before calling the AI model
+    if (data.fieldMeta?.candidates?.length) {
+      return {
+        success: true,
+        suggestions: data.fieldMeta.candidates.map(c => ({
+          text: c.value,
+          derivation: c.source
+        })),
+        isFormFill: true,
+        reason: `Detected ${data.fieldMeta.fieldType} field`
+      };
+    }
+    
     const result = await groqService.generateSuggestions(mergedContext);
 
     if (configManager.get('enableHistoryTracking') && mergedContext.active_input_text) {
