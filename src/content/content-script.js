@@ -34,6 +34,7 @@
     skills:    ['skill', 'expertise', 'technology', 'tech_stack', 'techstack', 'languages', 'tools'],
     linkedin_url: ['linkedin'],
     github_url:   ['github'],
+    timezone:     ['timezone', 'time_zone', 'tz'],
     website:      ['website', 'portfolio', 'personal_site', 'homepage', 'personal_url'],
     experience_years: ['years_of_exp', 'yearsofexp', 'experience_years', 'yoe', 'years_experience'],
     issue_subject:     ['subject', 'issue_title', 'issuetitle', 'ticket_title', 'tickettitle', 'summary'],
@@ -137,6 +138,15 @@
         meta.candidates.push({ value: browser, source: 'Your browser version', confidence: 0.8 });
         meta.isFormFill = true;
       }
+    }
+    if (fieldType === 'timezone') {
+      try {
+        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        if (tz) {
+          meta.candidates.push({ value: tz, source: 'Your device', confidence: 1.0 });
+          meta.isFormFill = true;
+        }
+      } catch (e) { /* unsupported */ }
     }
 
     // ── Tab-dependent types: mark isFormFill so service-worker uses
