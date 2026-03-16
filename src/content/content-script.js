@@ -34,7 +34,7 @@
     skills:    ['skill', 'expertise', 'technology', 'tech_stack', 'techstack', 'languages', 'tools'],
     linkedin_url: ['linkedin'],
     github_url:   ['github'],
-    timezone:     ['timezone', 'time_zone', 'tz'],
+    timezone: ['timezone', 'time_zone'],
     website:      ['website', 'portfolio', 'personal_site', 'homepage', 'personal_url'],
     experience_years: ['years_of_exp', 'yearsofexp', 'experience_years', 'yoe', 'years_experience'],
     issue_subject:     ['subject', 'issue_title', 'issuetitle', 'ticket_title', 'tickettitle', 'summary'],
@@ -63,6 +63,9 @@
 
     // Special case: bare 'os' as a whole word (e.g. name="os", id="os")
     if (/(?:^|_)os(?:_|$)/.test(combined)) return 'os';
+
+    // Special case: bare 'tz' as a whole word (e.g. name="tz", name="user_tz")
+    if (/(?:^|_)tz(?:_|$)/.test(combined)) return 'timezone';
 
     return null;
   }

@@ -76,7 +76,7 @@ class FormDetector {
     if (/(city|town|municipality)/.test(combined)) return 'city';
     if (/(country)/.test(combined)) return 'country';
     if (/(zip|postal|postcode)/.test(combined)) return 'zip';
-    if (/(timezone|time[_\s-]?zone|tz)/.test(combined)) return 'timezone';
+    if (/(^|\W)(timezone|time[_\s-]?zone|\btz\b)|_tz$/.test(combined)) return 'timezone';
 
     // ── Search / generic ────────────────────────────────────────────────────
     if (meta.type === 'search' || /(search|query|q)/.test(combined)) return 'search';
