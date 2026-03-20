@@ -14,7 +14,14 @@ Thanks to everyone who has helped improve SuggestPilot!
       <a href="https://github.com/Shantanugupta43">
         <img src="https://avatars.githubusercontent.com/u/99300527?v=4" width="80px;" alt="Shantanugupta43"/><br />
         <sub><b>@Shantanugupta43</b></sub><br />
-        <sub>13 PRs merged</sub>
+        <sub>14 PRs merged</sub>
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/raido5">
+        <img src="https://avatars.githubusercontent.com/u/169839918?v=4" width="80px;" alt="raido5"/><br />
+        <sub><b>@raido5</b></sub><br />
+        <sub>1 PR merged</sub>
       </a>
     </td>
     <td align="center">
