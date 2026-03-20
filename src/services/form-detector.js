@@ -64,7 +64,7 @@ class FormDetector {
     if (/(website|portfolio|personal[_\s-]?site|homepage|url|link)/.test(combined)) return 'website';
     if (/(years[_\s]?of[_\s]?exp|experience[_\s]?years|yoe)/.test(combined)) return 'experience_years';
     if (/(skill|expertise|technology|tech[_\s]?stack|languages|tools)/.test(combined)) return 'skills';
-
+   
     // ── Support / bug report ─────────────────────────────────────────────────
     if (/(os|operating[_\s]?system|platform)/.test(combined)) return 'os';
     if (/(browser|user[_\s]?agent)/.test(combined)) return 'browser';
@@ -76,6 +76,7 @@ class FormDetector {
     if (/(city|town|municipality)/.test(combined)) return 'city';
     if (/(country)/.test(combined)) return 'country';
     if (/(zip|postal|postcode)/.test(combined)) return 'zip';
+    if (/(^|\W)(timezone|time[_\s-]?zone|\btz\b)|_tz$/.test(combined)) return 'timezone';
 
     // ── Search / generic ────────────────────────────────────────────────────
     if (meta.type === 'search' || /(search|query|q)/.test(combined)) return 'search';
@@ -191,6 +192,15 @@ class FormDetector {
             confidence: 0.9
           });
         }
+        break;
+      }
+
+      // ── Timezone: detect from browser ─────────────────────────────────────
+      case 'timezone': {
+        try {
+          const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+          if (tz) candidates.push({ value: tz, source: 'Your device', confidence: 1.0 });
+        } catch (e) { /* unsupported by the browser*/ }
         break;
       }
 
