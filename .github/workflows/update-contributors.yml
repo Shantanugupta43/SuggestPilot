@@ -112,7 +112,7 @@ jobs:
             echo "No changes to commit, skipping PR."
           else
             git commit -m "docs: update contributors table [skip ci]"
-            git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }} "$BRANCH"
+            git push origin "$BRANCH"
             gh pr create \
               --title "docs: update contributors table" \
               --body "Automated contributors table update triggered by merge of #${{ github.event.pull_request.number }}." \
@@ -121,3 +121,4 @@ jobs:
           fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
