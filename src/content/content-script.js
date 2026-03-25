@@ -498,15 +498,7 @@
 
     if (!suggestionOverlay) return;
 
-    const rect = input.getBoundingClientRect();
-    let top = rect.bottom + window.scrollY + 10;
-    const left = rect.left + window.scrollX;
-    if (isAddressBar) top = rect.bottom + window.scrollY + 14;
-
     suggestionOverlay.style.display = 'block';
-    suggestionOverlay.style.left = `${left}px`;
-    suggestionOverlay.style.top = `${top}px`;
-    suggestionOverlay.style.width = `${Math.max(rect.width, 320)}px`;
 
     // Counter pill
     const counter = currentSuggestions.length > 1
@@ -545,18 +537,13 @@
       <div style="font-size:10.5px;color:rgba(255,255,255,0.38);font-weight:400;">Tab to accept${currentSuggestions.length > 1 ? ' · ↑↓ to cycle' : ''}</div>
       ${caption}
     `;
+
+    positionOverlay(input);
   }
 
   function showSuggestionLoading(input) {
     if (!suggestionOverlay) return;
-    const rect = input.getBoundingClientRect();
-    let top = rect.bottom + window.scrollY + 10;
-    const left = rect.left + window.scrollX;
-    if (isAddressBar) top = rect.bottom + window.scrollY + 14;
-
     suggestionOverlay.style.display = 'block';
-    suggestionOverlay.style.left = `${left}px`;
-    suggestionOverlay.style.top = `${top}px`;
     suggestionOverlay.innerHTML = `
       <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:rgba(255,255,255,0.55);font-weight:400;">
         <span style="display:inline-flex;gap:3px;align-items:center;">
@@ -567,6 +554,40 @@
         Thinking…
       </div>
     `;
+
+    positionOverlay(input);
+  }
+
+  function positionOverlay(input) {
+    if (!suggestionOverlay || !input) return;
+
+    const rect = input.getBoundingClientRect();
+    const spacing = isAddressBar ? 14 : 10;
+    const viewportPadding = 12;
+    const overlayWidth = Math.min(
+      Math.max(rect.width, 320),
+      window.innerWidth - (viewportPadding * 2)
+    );
+
+    suggestionOverlay.style.width = `${overlayWidth}px`;
+
+    const overlayHeight = suggestionOverlay.offsetHeight || 48;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+
+    let top = rect.bottom + spacing;
+    if (spaceBelow < overlayHeight + viewportPadding && spaceAbove > overlayHeight + viewportPadding) {
+      top = Math.max(viewportPadding, rect.top - overlayHeight - spacing);
+    }
+
+    const maxLeft = window.innerWidth - overlayWidth - viewportPadding;
+    const left = Math.min(
+      Math.max(viewportPadding, rect.left),
+      Math.max(viewportPadding, maxLeft)
+    );
+
+    suggestionOverlay.style.left = `${left}px`;
+    suggestionOverlay.style.top = `${top}px`;
   }
 
   function updateSuggestionDisplay() {
