@@ -302,6 +302,7 @@
   }
 
   function setupInputTracking() {
+   
     document.addEventListener('focusin', (e) => {
       const target = e.target;
       if (isInputElement(target)) {
@@ -330,6 +331,7 @@
     }, true);
 
     if (window.location.href.includes('claude.ai')) setupClaudeInputDetection();
+  
   }
 
   function setupClaudeInputDetection() {
@@ -403,12 +405,21 @@
     if (input.contentEditable === 'true') input.addEventListener('DOMCharacterDataModified', inputHandler);
   }
 
-  function debouncedGenerateSuggestions(input, value) {
-    clearTimeout(debounceTimer);
-    showSuggestionLoading(input);
-    const delay = isAddressBar ? 400 : 500;
-    debounceTimer = setTimeout(() => generateSuggestions(input, value), delay);
+  async function debouncedGenerateSuggestions(input, value) {
+  clearTimeout(debounceTimer);
+  const stored = await chrome.storage.local.get('extensionEnabled');
+  const enabled = stored.extensionEnabled ?? true;
+
+  if (!enabled) {
+    hideSuggestion(); 
+    return;
   }
+
+  showSuggestionLoading(input); 
+
+  const delay = isAddressBar ? 400 : 500;
+  debounceTimer = setTimeout(() => generateSuggestions(input, value), delay);
+}
 
   async function generateSuggestions(input, value) {
     try {
