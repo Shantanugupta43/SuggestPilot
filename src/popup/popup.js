@@ -53,6 +53,23 @@ async function initialize() {
     await loadConfig();
     await loadExtensionState();
     setupEventListeners();
+    
+    async function loadDarkMode() {
+  const result = await chrome.storage.local.get('darkMode');
+
+  if (result.darkMode) {
+    document.body.classList.add('dark');
+    sign.textContent = "✔";
+    outer.classList.add("active");
+    inner.classList.add("active");
+    text.classList.add("active");
+  } else {
+    document.body.classList.remove('dark');
+    sign.textContent = "X";
+  }
+}
+
+await loadDarkMode(); 
 
     if (currentConfig && currentConfig.isConfigured) {
       showView('main');
@@ -321,20 +338,27 @@ const inner = document.getElementById("innerbox");
 const text =document.getElementById("darkmode")
 
 function changeText() {
-  if (sign.textContent == "X") {
+  const isDark = sign.textContent == "X";
+
+  if (isDark) {
     sign.textContent = "✔";
     outer.classList.toggle("active");
     inner.classList.toggle("active");
     document.body.classList.add('dark');
     text.classList.toggle("active");
+
     
+    chrome.storage.local.set({ darkMode: true });
 
   } else {
     sign.textContent = "X";
     outer.classList.toggle("active");
     inner.classList.toggle("active");
     document.body.classList.remove('dark');
-     text.classList.toggle("active");
+    text.classList.toggle("active");
+
+   
+    chrome.storage.local.set({ darkMode: false });
   }
 }
 
