@@ -31,7 +31,7 @@
     os:        ['operating_system', 'operatingsystem', '_os_', 'os_name', 'your_os', 'platform'],
     browser:   ['browser', 'useragent', 'user_agent', 'browsername'],
     version:   ['version', 'app_version', 'appversion', 'software_version', 'softwareversion'],
-    languages: ['language', 'languages', 'spoken_language', 'preferred_language', 'language_preference', 'primary_language'],
+    languages: ['spoken_language', 'preferred_language', 'language_preference', 'native_language', 'mother_tongue', 'languages_spoken'],
     pronouns: ['pronouns', 'pronoun', 'gender_pronoun', 'preferred_pronouns'],
     education: ['education', 'education_level', 'highest_education', 'degree', 'qualification', 'academic_level'],
     skills:    ['skill', 'expertise', 'technology', 'tech_stack', 'techstack', 'tools'],
@@ -63,6 +63,8 @@
         return type === 'sensitive' ? null : type;
       }
     }
+
+    if (isSpokenLanguageField(combined)) return 'languages';
 
     // Special case: bare 'os' as a whole word (e.g. name="os", id="os")
     if (/(?:^|_)os(?:_|$)/.test(combined)) return 'os';
@@ -99,6 +101,56 @@
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, ' ')
       .trim();
+  }
+
+  function isSpokenLanguageField(combined) {
+    const explicitPatterns = [
+      'spoken_language',
+      'preferred_language',
+      'language_preference',
+      'native_language',
+      'mother_tongue',
+      'languages_spoken'
+    ];
+
+    if (explicitPatterns.some(pattern => combined.includes(pattern))) {
+      return true;
+    }
+
+    if (!/(?:^|_)(language|languages)(?:_|$)/.test(combined)) {
+      return false;
+    }
+
+    const technicalPatterns = [
+      'coding_language',
+      'programming_language',
+      'query_language',
+      'language_style',
+      'primary_language',
+      'secondary_language',
+      'source_language',
+      'target_language',
+      'language_code',
+      'locale'
+    ];
+
+    return !technicalPatterns.some(pattern => combined.includes(pattern));
+  }
+
+  function matchesLanguageOption(optionNormalized, variation) {
+    const normalizedVariation = normalizeCandidateValue(variation);
+    if (!normalizedVariation) return false;
+
+    if (optionNormalized === normalizedVariation) {
+      return true;
+    }
+
+    if (/^[a-z]{2}$/.test(normalizedVariation)) {
+      return false;
+    }
+
+    return optionNormalized.includes(normalizedVariation) ||
+      normalizedVariation.includes(optionNormalized);
   }
 
   function createCandidateList(values, source, confidence) {
@@ -166,10 +218,7 @@
       if (optionEntries.length > 0) {
         const matched = optionEntries.find(option =>
           variations.some(variation => {
-            const normalizedVariation = normalizeCandidateValue(variation);
-            return option.normalized === normalizedVariation ||
-              option.normalized.includes(normalizedVariation) ||
-              normalizedVariation.includes(option.normalized);
+            return matchesLanguageOption(option.normalized, variation);
           })
         );
 

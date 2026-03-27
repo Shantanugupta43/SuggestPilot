@@ -8,6 +8,54 @@
  */
 
 class FormDetector {
+  _isSpokenLanguageField(combined) {
+    const explicitPatterns = [
+      'preferred language',
+      'spoken language',
+      'native language',
+      'language preference',
+      'mother tongue',
+      'languages spoken',
+      'preferred_language',
+      'spoken_language',
+      'native_language',
+      'language_preference',
+      'mother_tongue',
+      'languages_spoken'
+    ];
+
+    if (explicitPatterns.some(pattern => combined.includes(pattern))) {
+      return true;
+    }
+
+    if (!/(^|[\W_])(language|languages)([\W_]|$)/.test(combined)) {
+      return false;
+    }
+
+    const technicalPatterns = [
+      'coding language',
+      'programming language',
+      'query language',
+      'language style',
+      'primary language',
+      'secondary language',
+      'source language',
+      'target language',
+      'language code',
+      'coding_language',
+      'programming_language',
+      'query_language',
+      'language_style',
+      'primary_language',
+      'secondary_language',
+      'source_language',
+      'target_language',
+      'language_code',
+      'locale'
+    ];
+
+    return !technicalPatterns.some(pattern => combined.includes(pattern));
+  }
 
   /**
    * Analyse a focused input element and return field metadata + smart fill candidates.
@@ -63,7 +111,7 @@ class FormDetector {
     if (/(github|git[_\s-]hub)/.test(combined)) return 'github_url';
     if (/(website|portfolio|personal[_\s-]?site|homepage|url|link)/.test(combined)) return 'website';
     if (/(years[_\s]?of[_\s]?exp|experience[_\s]?years|yoe)/.test(combined)) return 'experience_years';
-    if (/(preferred[_\s-]?language|spoken[_\s-]?language|languages?)/.test(combined)) return 'languages';
+    if (this._isSpokenLanguageField(combined)) return 'languages';
     if (/(pronouns?|preferred[_\s-]?pronouns?)/.test(combined)) return 'pronouns';
     if (/(education|education[_\s-]?level|highest[_\s-]?education|degree|qualification|academic[_\s-]?level)/.test(combined)) return 'education';
     if (/(skill|expertise|technology|tech[_\s]?stack|tools)/.test(combined)) return 'skills';
