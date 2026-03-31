@@ -307,7 +307,12 @@ class FormDetector {
       : null;
 
     return locales
-      .map(locale => displayNames?.of(locale.split('-')[0]) || locale)
+      .map(locale => {
+        const code = locale.split('-')[0];
+        const displayName = displayNames?.of(code);
+        if (!displayName || /^[a-z]{2}$/i.test(displayName)) return null;
+        return displayName;
+      })
       .filter((value, index, all) => value && all.indexOf(value) === index)
       .slice(0, 3);
   }
