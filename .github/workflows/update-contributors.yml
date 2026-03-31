@@ -20,14 +20,20 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.PAT_TOKEN }}
           persist-credentials: true
           fetch-depth: 0
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin https://x-access-token:${{ secrets.PAT_TOKEN }}@github.com/${{ github.repository }}.git
 
       - name: Update contributors in README
         uses: actions/github-script@v7
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.PAT_TOKEN }}
           script: |
             const fs = require('fs');
 
@@ -117,20 +123,30 @@ jobs:
             fs.writeFileSync('README.md', readme);
             console.log('Updated contributors: ' + entries.map(([l]) => l).join(', '));
 
-      - name: Commit directly to main
+      - name: Create PR and auto-merge
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
           git add README.md
 
           if git diff --staged --quiet README.md; then
-            echo "No changes to README.md, skipping commit."
+            echo "No changes to README.md, skipping."
             exit 0
           fi
 
           git commit -m "docs: update contributors table [skip ci]"
-          git pull origin main --rebase
-          git push origin main
+
+          BRANCH="update-contributors-${{ github.run_id }}"
+          git checkout -b "$BRANCH"
+          git push origin "$BRANCH"
+
+          PR_URL=$(gh pr create \
+            --title "docs: update contributors table" \
+            --body "Automated contributors table update triggered by merge of #${{ github.event.pull_request.number }}." \
+            --base main \
+            --head "$BRANCH")
+
+          echo "PR created: $PR_URL"
+
+          # Auto-merge the PR immediately
+          gh pr merge "$PR_URL" --squash --auto --delete-branch
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
