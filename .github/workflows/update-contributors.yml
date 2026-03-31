@@ -122,14 +122,16 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          git pull origin main --rebase
+          # Stage changes BEFORE rebase
+          git add README.md
 
-          if git diff --quiet README.md; then
+          if git diff --staged --quiet README.md; then
             echo "No changes to README.md, skipping commit."
             exit 0
           fi
 
-          git add README.md
+          git pull origin main --rebase
+
           git commit -m "docs: update contributors table [skip ci]"
           git push origin main
         env:
