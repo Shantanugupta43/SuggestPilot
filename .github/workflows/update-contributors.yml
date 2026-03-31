@@ -122,7 +122,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          # Stage changes BEFORE rebase
           git add README.md
 
           if git diff --staged --quiet README.md; then
@@ -130,9 +129,8 @@ jobs:
             exit 0
           fi
 
-          git pull origin main --rebase
-
           git commit -m "docs: update contributors table [skip ci]"
+          git pull origin main --rebase
           git push origin main
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
