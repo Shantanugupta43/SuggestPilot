@@ -52,7 +52,24 @@ async function initialize() {
   try {
     await loadConfig();
     await loadExtensionState();
+    await loadDarkMode()
     setupEventListeners();
+
+    
+    async function loadDarkMode() {
+  const result = await chrome.storage.local.get('darkMode');
+  const isDark = result.darkMode;
+
+  if (isDark) {
+    sign.textContent = "✔";
+    outer.classList.add("active");
+    inner.classList.add("active");
+    document.body.classList.add('dark');
+    text.classList.add("active");
+  } else {
+    sign.textContent = "X";
+  }
+}
 
     if (currentConfig && currentConfig.isConfigured) {
       showView('main');
@@ -320,21 +337,28 @@ const outer = document.getElementById("outerbox");
 const inner = document.getElementById("innerbox");
 const text =document.getElementById("darkmode")
 
-function changeText() {
-  if (sign.textContent == "X") {
+async function changeText() {
+  const isDark = document.body.classList.contains('dark');
+
+  if (!isDark) {
     sign.textContent = "✔";
-    outer.classList.toggle("active");
-    inner.classList.toggle("active");
+    outer.classList.add("active");
+    inner.classList.add("active");
     document.body.classList.add('dark');
-    text.classList.toggle("active");
-    
+    text.classList.add("active");
+
+    // ✅ Save state
+    await chrome.storage.local.set({ darkMode: true });
 
   } else {
     sign.textContent = "X";
-    outer.classList.toggle("active");
-    inner.classList.toggle("active");
+    outer.classList.remove("active");
+    inner.classList.remove("active");
     document.body.classList.remove('dark');
-     text.classList.toggle("active");
+    text.classList.remove("active");
+
+    // ✅ Save state
+    await chrome.storage.local.set({ darkMode: false });
   }
 }
 
