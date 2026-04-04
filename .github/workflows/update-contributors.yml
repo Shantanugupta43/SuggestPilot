@@ -4,6 +4,10 @@ on:
   pull_request:
     types: [closed]
 
+concurrency:
+  group: update-contributors
+  cancel-in-progress: false
+
 jobs:
   update-contributors:
     if: github.event.pull_request.merged == true
@@ -16,27 +20,43 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-        persist-credentials: true
-        fetch-depth: 0
+          token: ${{ secrets.PAT_TOKEN }}
+          persist-credentials: true
+          fetch-depth: 0
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin https://x-access-token:${{ secrets.PAT_TOKEN }}@github.com/${{ github.repository }}.git
 
       - name: Update contributors in README
         uses: actions/github-script@v7
         with:
+          github-token: ${{ secrets.PAT_TOKEN }}
           script: |
             const fs = require('fs');
-            // Fetch all merged PRs
+
             const pulls = await github.paginate(github.rest.pulls.list, {
               owner: context.repo.owner,
               repo: context.repo.repo,
               state: 'closed',
               per_page: 100
             });
+
             const mergedPulls = pulls.filter(pr => pr.merged_at !== null);
-            // Build contributor map: username -> { avatar_url, pr_count }
+
+            const BOT_LOGINS = ['dependabot', 'renovate', 'snyk-bot', 'imgbot', 'allcontributors'];
+
             const contributors = {};
             for (const pr of mergedPulls) {
               const login = pr.user.login;
-              if (login.endsWith('[bot]') || pr.user.type === 'Bot') continue;
+              if (
+                login.endsWith('[bot]') ||
+                pr.user.type === 'Bot' ||
+                BOT_LOGINS.includes(login.toLowerCase())
+              ) continue;
+
               if (!contributors[login]) {
                 contributors[login] = {
                   avatar_url: pr.user.avatar_url,
@@ -45,13 +65,15 @@ jobs:
               }
               contributors[login].pr_count += 1;
             }
-            // Build the contributors table HTML
+
             const entries = Object.entries(contributors)
               .sort((a, b) => b[1].pr_count - a[1].pr_count);
+
             if (entries.length === 0) {
               console.log('No contributors found, skipping README update.');
               return;
             }
+
             const cells = entries.map(([login, data]) => {
               const prLabel = data.pr_count === 1 ? '1 PR' : data.pr_count + ' PRs';
               return '    <td align="center">\n'
@@ -62,21 +84,23 @@ jobs:
                 + '      </a>\n'
                 + '    </td>';
             });
-            // Group into rows of 6
+
             const rows = [];
             for (let i = 0; i < cells.length; i += 6) {
               rows.push('  <tr>\n' + cells.slice(i, i + 6).join('\n') + '\n  </tr>');
             }
+
             const table = '<table>\n' + rows.join('\n') + '\n</table>';
             const block = '## 🙌 Contributors\n\n'
               + 'Thanks to everyone who has helped improve SuggestPilot!\n\n'
               + '<!-- CONTRIBUTORS-START -->\n'
               + table + '\n'
               + '<!-- CONTRIBUTORS-END -->';
-            // Read README
+
             let readme = fs.readFileSync('README.md', 'utf8');
             const startMarker = '<!-- CONTRIBUTORS-START -->';
             const endMarker = '<!-- CONTRIBUTORS-END -->';
+
             if (readme.includes(startMarker)) {
               const pattern = startMarker + '[\\s\\S]*?' + endMarker;
               readme = readme.replace(
@@ -95,30 +119,34 @@ jobs:
                 readme += '\n\n---\n\n' + block + '\n\n---\n';
               }
             }
+
             fs.writeFileSync('README.md', readme);
             console.log('Updated contributors: ' + entries.map(([l]) => l).join(', '));
 
-      - name: Commit and open PR
+      - name: Create PR and auto-merge
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git stash
-          git pull --rebase origin main
-          git stash pop
+          git add README.md
+
+          if git diff --staged --quiet README.md; then
+            echo "No changes to README.md, skipping."
+            exit 0
+          fi
+
+          git commit -m "docs: update contributors table [skip ci]"
+
           BRANCH="update-contributors-${{ github.run_id }}"
           git checkout -b "$BRANCH"
-          git add README.md
-          if git diff --staged --quiet; then
-            echo "No changes to commit, skipping PR."
-          else
-            git commit -m "docs: update contributors table [skip ci]"
-            git push origin "$BRANCH"
-            gh pr create \
-              --title "docs: update contributors table" \
-              --body "Automated contributors table update triggered by merge of #${{ github.event.pull_request.number }}." \
-              --base main \
-              --head "$BRANCH"
-          fi
+          git push origin "$BRANCH"
+
+          PR_URL=$(gh pr create \
+            --title "docs: update contributors table" \
+            --body "Automated contributors table update triggered by merge of #${{ github.event.pull_request.number }}." \
+            --base main \
+            --head "$BRANCH")
+
+          echo "PR created: $PR_URL"
+
+          # Auto-merge the PR immediately
+          gh pr merge "$PR_URL" --squash --auto --delete-branch
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}

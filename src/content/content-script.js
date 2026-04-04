@@ -14,6 +14,7 @@
   let debounceTimer = null;
   let lastInputValue = '';
   let isAddressBar = false;
+  let extensionEnabled = true;
 
   // Sites where the extension should stay completely silent
   const BLOCKED_DOMAINS = [
@@ -366,11 +367,22 @@
     return BLOCKED_DOMAINS.some(domain => host.includes(domain));
   }
 
-  function initialize() {
+  async function loadExtensionState() {
+    try {
+      const stored = await chrome.storage.local.get('extensionEnabled');
+      extensionEnabled = stored.extensionEnabled ?? true;
+    } catch (error) {
+      console.error('Failed to load extension state:', error);
+      extensionEnabled = true;
+    }
+  }
+
+  async function initialize() {
     if (isBlockedDomain()) {
       console.log('AI Context Assistant: disabled on', window.location.hostname);
       return;
     }
+    await loadExtensionState();
     setupInputTracking();
     setupMessageListener();
     createSuggestionOverlay();
@@ -575,6 +587,11 @@
 
   function debouncedGenerateSuggestions(input, value) {
     clearTimeout(debounceTimer);
+    if (!extensionEnabled) {
+      hideSuggestion();
+      currentSuggestions = [];
+      return;
+    }
     showSuggestionLoading(input);
     const delay = isAddressBar ? 400 : 500;
     debounceTimer = setTimeout(() => generateSuggestions(input, value), delay);
@@ -582,6 +599,12 @@
 
   async function generateSuggestions(input, value) {
     try {
+      if (!extensionEnabled) {
+        hideSuggestion();
+        currentSuggestions = [];
+        return;
+      }
+
       // Build form field metadata from the focused element
       const fieldMeta = buildFieldMeta(input);
 
@@ -795,7 +818,10 @@
       case 'getActiveInput': return getActiveInput();
       case 'insertSuggestion': return insertSuggestion(request.data.text);
       case 'toggleExtension':
-        if (!request.data.enabled) hideSuggestion();
+        extensionEnabled = request.data.enabled ?? true;
+        clearTimeout(debounceTimer);
+        currentSuggestions = [];
+        if (!extensionEnabled) hideSuggestion();
         return { success: true };
       default: throw new Error(`Unknown action: ${request.action}`);
     }
@@ -841,6 +867,6 @@
     }
   }
 
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initialize);
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => initialize());
   else initialize();
 })();
