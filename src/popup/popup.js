@@ -147,14 +147,17 @@ function setupEventListeners() {
   elements.blockedDomains.addEventListener("keydown", (event) => {
     if (event.key == "Enter") {
       event.preventDefault();
-      let domain = event.target.value.trim();
-      if (domain != "" && !currentConfig.blockedDomains.includes(domain)) {
+      let cleanDomain = extractDomain(event.target.value);
+      if (cleanDomain && !currentConfig.blockedDomains.includes(cleanDomain)) {
         currentConfig.blockedDomains = [
           ...currentConfig.blockedDomains,
-          domain,
+          cleanDomain,
         ];
+
         event.target.value = "";
         renderTags();
+      } else if (!cleanDomain) {
+        console.error("Invalid domain/s entered.");
       }
     }
   });
@@ -344,6 +347,36 @@ async function toggleExtension() {
   } catch (error) {
     console.error("Failed to toggle extension:", error);
     showStatus("Failed to toggle extension", "error");
+  }
+}
+
+/**
+ * Sanitizes user input to extract just the base domain.
+ * "https://www.reddit.com/r/webdev" -> "reddit.com"
+ * "linkedin.com/feed/" -> "linkedin.com"
+ */
+function extractDomain(input) {
+  let urlString = input.toLowerCase().trim();
+
+  if (!urlString.startsWith("https://") && !urlString.startsWith("http://")) {
+    urlString = "https://" + urlString;
+  }
+
+  try {
+    const url = new URL(urlString);
+    let hostname = url.hostname;
+
+    if (!hostname.includes(".") || hostname.includes(" ")) {
+      return null;
+    }
+
+    if (hostname.startsWith("www.")) {
+      hostname = hostname.substring(4);
+    }
+
+    return hostname;
+  } catch (error) {
+    return null;
   }
 }
 
