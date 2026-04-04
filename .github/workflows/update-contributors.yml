@@ -126,6 +126,9 @@ jobs:
 
       - name: Commit and push directly to main
         run: |
+
+          git pull --rebase origin main
+          
           git add README.md
 
           if git diff --staged --quiet README.md; then
@@ -133,7 +136,6 @@ jobs:
             exit 0
           fi
 
-          git pull --rebase origin main
           git commit -m "docs: update contributors table [skip ci]"
           git push origin main
         env:
