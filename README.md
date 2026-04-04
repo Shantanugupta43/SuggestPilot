@@ -25,6 +25,13 @@ Thanks to everyone who has helped improve SuggestPilot!
       </a>
     </td>
     <td align="center">
+      <a href="https://github.com/pdinduku">
+        <img src="https://avatars.githubusercontent.com/u/153860249?v=4" width="80px;" alt="pdinduku"/><br />
+        <sub><b>@pdinduku</b></sub><br />
+        <sub>1 PR merged</sub>
+      </a>
+    </td>
+    <td align="center">
       <a href="https://github.com/raido5">
         <img src="https://avatars.githubusercontent.com/u/169839918?v=4" width="80px;" alt="raido5"/><br />
         <sub><b>@raido5</b></sub><br />
