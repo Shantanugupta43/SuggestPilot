@@ -3,7 +3,28 @@
  * + Smart Form-Fill detection
  * + Session-aware suggestion labels
  */
-import configManager from "../config/config-manager.js";
+
+const configManager = {
+  async get(key, defaultValue = null) {
+    try {
+      const syncResult = await chrome.storage.sync.get(key);
+      if (syncResult[key] !== undefined) {
+        return syncResult[key];
+      }
+      const localResult = await chrome.storage.local.get(key);
+      if (localResult[key] !== undefined) {
+        return localResult[key];
+      }
+    } catch (error) {
+      console.warn("Failed to read config from extension storage:", error);
+    }
+    return defaultValue;
+  },
+  async getBlockedDomains() {
+    const blockedDomains = await this.get("blockedDomains", []);
+    return Array.isArray(blockedDomains) ? blockedDomains : [];
+  },
+};
 
 (function () {
   "use strict";
@@ -338,7 +359,12 @@ import configManager from "../config/config-manager.js";
   function isBlockedDomain(blockedDomains) {
     if (!Array.isArray(blockedDomains)) return false;
     const host = window.location.hostname.toLowerCase();
-    return blockedDomains.some((domain) => host.includes(domain));
+    return blockedDomains.some((domain) => {
+      if (typeof domain !== "string") return false;
+      const normalizedDomain = domain.trim().toLowerCase().replace(/^\.+/, "");
+      if (!normalizedDomain) return false;
+      return host === normalizedDomain || host.endsWith(`.${normalizedDomain}`);
+    });
   }
 
   async function initialize() {

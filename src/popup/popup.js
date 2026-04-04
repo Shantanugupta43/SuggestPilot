@@ -145,7 +145,7 @@ function setupEventListeners() {
 
   // Blocked domains list
   elements.blockedDomains.addEventListener("keydown", (event) => {
-    if (event.key == "Enter") {
+    if (event.key === "Enter") {
       event.preventDefault();
       let cleanDomain = extractDomain(event.target.value);
       if (cleanDomain && !currentConfig.blockedDomains.includes(cleanDomain)) {
@@ -241,7 +241,10 @@ function createSuggestionCard(suggestion, index) {
   if (derivation) {
     const derivationEl = document.createElement("div");
     derivationEl.className = "suggestion-derivation";
-    derivationEl.innerHTML = `<strong>Why:</strong> ${derivation}`;
+    const derivationLabelEl = document.createElement("strong");
+    derivationLabelEl.textContent = "Why:";
+    derivationEl.appendChild(derivationLabelEl);
+    derivationEl.appendChild(document.createTextNode(` ${derivation}`));
     card.appendChild(derivationEl);
   }
 
@@ -351,9 +354,11 @@ async function toggleExtension() {
 }
 
 /**
- * Sanitizes user input to extract just the base domain.
+ * Sanitizes user input to extract a normalized hostname.
+ * Removes the protocol/path and strips a leading "www." if present.
  * "https://www.reddit.com/r/webdev" -> "reddit.com"
  * "linkedin.com/feed/" -> "linkedin.com"
+ * "https://foo.reddit.com/r/webdev" -> "foo.reddit.com"
  */
 function extractDomain(input) {
   let urlString = input.toLowerCase().trim();
@@ -440,15 +445,17 @@ function renderTags() {
   currentConfig.blockedDomains.forEach((domain, index) => {
     const tag = document.createElement("div");
     tag.className = "tag";
-    tag.innerHTML = `
-          ${domain}
-          <button type="button" data-index="${index}">&times;</button>
-        `;
-    tag.querySelector("button").addEventListener("click", () => {
+    tag.appendChild(document.createTextNode(domain));
+    const removeButton = document.createElement("button");
+    removeButton.type = "button";
+    removeButton.dataset.index = index;
+    removeButton.textContent = "×";
+    removeButton.setAttribute("aria-label", `Remove blocked domain ${domain}`);
+    removeButton.addEventListener("click", () => {
       currentConfig.blockedDomains.splice(index, 1);
       renderTags();
     });
-
+    tag.appendChild(removeButton);
     elements.domainsContainer.insertBefore(tag, elements.blockedDomains);
   });
 }

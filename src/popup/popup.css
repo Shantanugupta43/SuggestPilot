@@ -712,5 +712,6 @@ body.dark .connection-status.error {
 }
 
 .tag button:focus {
-    outline: none;
+    outline: 2px solid white;
+    outline-offset: 2px;
 }
