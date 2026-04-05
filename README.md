@@ -14,7 +14,28 @@ Thanks to everyone who has helped improve SuggestPilot!
       <a href="https://github.com/Shantanugupta43">
         <img src="https://avatars.githubusercontent.com/u/99300527?v=4" width="80px;" alt="Shantanugupta43"/><br />
         <sub><b>@Shantanugupta43</b></sub><br />
-        <sub>14 PRs merged</sub>
+        <sub>22 PRs merged</sub>
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/saijaku0">
+        <img src="https://avatars.githubusercontent.com/u/79520056?v=4" width="80px;" alt="saijaku0"/><br />
+        <sub><b>@saijaku0</b></sub><br />
+        <sub>2 PRs merged</sub>
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/terminalchai">
+        <img src="https://avatars.githubusercontent.com/u/213856599?v=4" width="80px;" alt="terminalchai"/><br />
+        <sub><b>@terminalchai</b></sub><br />
+        <sub>2 PRs merged</sub>
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/pdinduku">
+        <img src="https://avatars.githubusercontent.com/u/153860249?v=4" width="80px;" alt="pdinduku"/><br />
+        <sub><b>@pdinduku</b></sub><br />
+        <sub>1 PR merged</sub>
       </a>
     </td>
     <td align="center">
@@ -31,6 +52,8 @@ Thanks to everyone who has helped improve SuggestPilot!
         <sub>1 PR merged</sub>
       </a>
     </td>
+  </tr>
+  <tr>
     <td align="center">
       <a href="https://github.com/Utkarsh-rwt">
         <img src="https://avatars.githubusercontent.com/u/241274883?v=4" width="80px;" alt="Utkarsh-rwt"/><br />
@@ -156,79 +179,7 @@ The Groq API prompt contains tab titles and recent page titles from your browser
 
 ## Contributing
 
-Pull requests are welcome. A few areas that would make a meaningful difference:
-
-- **More form field types** — `form-detector.js` currently handles 18 patterns. Expanding coverage for more field types (education, languages, pronouns, timezone) would improve the form-fill feature significantly.
-- **Blocked domains list** — a community-maintained list of sites where suggestions are unwanted or intrusive would be useful.
-- **Better LinkedIn tab parsing** — job title and company extraction from LinkedIn page titles is heuristic and fragile. Better selectors or a more robust parsing strategy would help.
-- **Firefox support** — the extension uses Chrome-specific APIs (`chrome.history`, `chrome.tabs`). A Firefox-compatible manifest v2 port would broaden reach.
-- **Tests** — there are none. Unit tests for `session-tracker.js`, `form-detector.js`, and `groq-service.js` parsing logic would be a good place to start.
-
-  
-## How to Contribute (Branch & Pull Request Workflow)
-
-If you'd like to contribute code, please follow this workflow.
-
-### 1. Fork the Repository
-
-Click **Fork** on GitHub to create your own copy of the repository.
-
-
-### 2. Clone Your Fork
-
-```bash
-git clone https://github.com/YOUR-USERNAME/SuggestPilot.git
-cd SuggestPilot
-```
-
-
-### 3. Create a New Branch
-
-Always create a new branch from `main`.  
-Never commit directly to `main`.
-
-```bash
-git checkout -b feature/short-description
-```
-
-Examples:
-
-- `feature/add-timezone-field`
-- `fix/session-expiry-logic`
-- `refactor/prompt-builder`
-- `docs/improve-readme`
-
-Keep branches small and focused on one change.
-
-
-### 4. Make Your Changes
-
-Before submitting:
-
-- Test locally via `chrome://extensions`
-- Ensure there are no console errors
-- Confirm suggestions still return valid JSON
-- Make sure typing latency is not degraded
-- Verify no sensitive fields are exposed
-
-
-### 5. Commit Clearly
-
-Use clear, descriptive commit messages
-
-### 6. Push Your Branch
-
-```bash
-git push origin feature/short-description
-```
-
----
-
-### 7. Open a Pull Request
-
-Go to your fork on GitHub and click **Compare & pull request**.
-
-If changes are requested, update your branch and push again — the PR will update automatically.
+Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on how to contribute to this project.
 
 ## Acknowledgements
 

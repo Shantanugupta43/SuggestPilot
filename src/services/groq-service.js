@@ -40,7 +40,10 @@ class GroqService {
       console.log('Session intent:', context.sessionIntent?.sessionSummary || 'none');
       console.log('Form field:', context.fieldMeta?.fieldType || 'none');
 
-      return await this.callWithRetry(apiKey, prompt, systemPrompt);
+      const result = await this.callWithRetry(apiKey, prompt, systemPrompt);
+      return context.fieldMeta?.fieldType
+        ? { ...result, isFormFill: true }
+        : result;
     } catch (error) {
       console.error('Groq API error:', error);
       return { reason: 'Error generating suggestions', suggestions: [], error: error.message };

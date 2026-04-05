@@ -593,7 +593,7 @@ async function clearData() {
     console.error("Failed to clear data:", error);
     showStatus("Failed to clear data", "error");
   }
-}
+} 
 
 // Initialize on load
 document.addEventListener("DOMContentLoaded", initialize);

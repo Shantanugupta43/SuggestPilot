@@ -8,6 +8,54 @@
  */
 
 class FormDetector {
+  _isSpokenLanguageField(combined) {
+    const explicitPatterns = [
+      'preferred language',
+      'spoken language',
+      'native language',
+      'language preference',
+      'mother tongue',
+      'languages spoken',
+      'preferred_language',
+      'spoken_language',
+      'native_language',
+      'language_preference',
+      'mother_tongue',
+      'languages_spoken'
+    ];
+
+    if (explicitPatterns.some(pattern => combined.includes(pattern))) {
+      return true;
+    }
+
+    if (!/(^|[\W_])(language|languages)([\W_]|$)/.test(combined)) {
+      return false;
+    }
+
+    const technicalPatterns = [
+      'coding language',
+      'programming language',
+      'query language',
+      'language style',
+      'primary language',
+      'secondary language',
+      'source language',
+      'target language',
+      'language code',
+      'coding_language',
+      'programming_language',
+      'query_language',
+      'language_style',
+      'primary_language',
+      'secondary_language',
+      'source_language',
+      'target_language',
+      'language_code',
+      'locale'
+    ];
+
+    return !technicalPatterns.some(pattern => combined.includes(pattern));
+  }
 
   /**
    * Analyse a focused input element and return field metadata + smart fill candidates.
@@ -63,7 +111,10 @@ class FormDetector {
     if (/(github|git[_\s-]hub)/.test(combined)) return 'github_url';
     if (/(website|portfolio|personal[_\s-]?site|homepage|url|link)/.test(combined)) return 'website';
     if (/(years[_\s]?of[_\s]?exp|experience[_\s]?years|yoe)/.test(combined)) return 'experience_years';
-    if (/(skill|expertise|technology|tech[_\s]?stack|languages|tools)/.test(combined)) return 'skills';
+    if (this._isSpokenLanguageField(combined)) return 'languages';
+    if (/(pronouns?|preferred[_\s-]?pronouns?)/.test(combined)) return 'pronouns';
+    if (/(education|education[_\s-]?level|highest[_\s-]?education|degree|qualification|academic[_\s-]?level)/.test(combined)) return 'education';
+    if (/(skill|expertise|technology|tech[_\s]?stack|tools)/.test(combined)) return 'skills';
    
     // ── Support / bug report ─────────────────────────────────────────────────
     if (/(os|operating[_\s]?system|platform)/.test(combined)) return 'os';
@@ -133,6 +184,14 @@ class FormDetector {
           const skills = this._extractSkillsFromGitHub(ghTab.title);
           if (skills) candidates.push({ value: skills, source: 'GitHub tab', confidence: 0.7 });
         }
+        break;
+      }
+
+      case 'languages': {
+        const preferredLanguages = this._detectLanguages();
+        preferredLanguages.forEach(language => {
+          candidates.push({ value: language, source: 'Browser language preferences', confidence: 0.95 });
+        });
         break;
       }
 
@@ -236,6 +295,26 @@ class FormDetector {
     // GitHub profile: "username (Full Name) · GitHub" — not much to extract.
     // Return null and let the AI build skills suggestions from history instead.
     return null;
+  }
+
+  _detectLanguages() {
+    const locales = Array.from(new Set(
+      [navigator.language, ...(navigator.languages || [])].filter(Boolean)
+    ));
+
+    const displayNames = typeof Intl.DisplayNames === 'function'
+      ? new Intl.DisplayNames(locales, { type: 'language' })
+      : null;
+
+    return locales
+      .map(locale => {
+        const code = locale.split('-')[0];
+        const displayName = displayNames?.of(code);
+        if (!displayName || /^[a-z]{2}$/i.test(displayName)) return null;
+        return displayName;
+      })
+      .filter((value, index, all) => value && all.indexOf(value) === index)
+      .slice(0, 3);
   }
 
   _detectOS() {
