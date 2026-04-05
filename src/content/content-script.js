@@ -21,8 +21,9 @@ const configManager = {
     return defaultValue;
   },
   async getBlockedDomains() {
-    const blockedDomains = await this.get("blockedDomains", []);
-    return Array.isArray(blockedDomains) ? blockedDomains : [];
+    const result = await chrome.storage.local.get('config');
+    const blockedDomains = result?.config?.blockedDomains;
+    return Array.isArray(blockedDomains) ? blockedDomains : ['linkedin.com'];
   },
 };
 
@@ -369,7 +370,8 @@ const configManager = {
 
   async function initialize() {
     try {
-      const blockedDomains = (await configManager.get("blockedDomains")) || [];
+      const blockedDomains = await configManager.getBlockedDomains();
+      console.log('BLOCKED DOMAINS:', blockedDomains);
       if (isBlockedDomain(blockedDomains)) {
         console.log("AI Context Assistant: disabled", window.location.hostname);
         return;
