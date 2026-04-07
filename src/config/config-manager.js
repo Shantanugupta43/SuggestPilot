@@ -78,7 +78,7 @@ class ConfigManager {
   }
 
   async clear() {
-    await chrome.storage.local.clear();
+    await chrome.storage.local.remove(['config', 'groqApiKey', 'sessionIntent', 'pastSearches', 'extensionEnabled']);
     this.config = null;
     this.initialized = false;
   }
