@@ -141,9 +141,12 @@
           <div class="form-group">
             <label for="modelSelect">Model</label>
             <select id="modelSelect">
-              <option value="llama-3.1-8b-instant">Llama 3.1 8B Instant (Fastest available)</option>
+              <option value="llama-3.1-8b-instant">Llama 3.1 8B Instant (Fastest)</option>
+              <option value="llama-3.3-70b-versatile">Llama 3.3 70B Versatile (Higher quality)</option>
+              <option value="llama-3.1-70b-versatile">Llama 3.1 70B Versatile</option>
+              <option value="gemma2-9b-it">Gemma 2 9B</option>
             </select>
-            <small>Fast 8B parameter model</small>
+            <small>Choose based on speed vs. quality needs</small>
           </div>
 
           <button id="testConnectionBtn" class="btn btn-secondary">Test Connection</button>
@@ -182,6 +185,19 @@
           </div>
 
 
+        </section>
+
+        <!-- Blocked Domains Section -->
+        <section class="settings-section">
+          <h3>Blocked Domains</h3>
+          <p class="about-text">Suggestions won't appear on these sites. Add or remove domains below.</p>
+          <div class="form-group">
+            <label for="blockedDomainsInput">Domains (one per line)</label>
+            <textarea id="blockedDomainsInput" rows="6" placeholder="example.com&#10;another.com"></textarea>
+            <small>Enter one domain per line</small>
+          </div>
+          <button id="saveBlockedDomainsBtn" class="btn btn-secondary">Save Domains</button>
+          <button id="resetBlockedDomainsBtn" class="btn btn-secondary" style="margin-top:8px;">Reset to Defaults</button>
         </section>
 
         <!-- About Section -->

@@ -2,6 +2,8 @@
  * Configuration Manager
  */
 
+import { DEFAULT_MAX_TOKENS, DEFAULT_TEMPERATURE, DEFAULT_BLOCKED_DOMAINS } from '../utils/constants.js';
+
 class ConfigManager {
   constructor() {
     this.config = null;
@@ -17,15 +19,16 @@ class ConfigManager {
       this.config = {
         groqApiKey: stored.groqApiKey || null,
         model: stored.config?.model || 'llama-3.1-8b-instant',
-        maxTokens: stored.config?.maxTokens || 150,
-        temperature: stored.config?.temperature || 0.3,
+        maxTokens: stored.config?.maxTokens || DEFAULT_MAX_TOKENS,
+        temperature: stored.config?.temperature || DEFAULT_TEMPERATURE,
         enableHistoryTracking: stored.config?.enableHistoryTracking ?? true,
         enableTabAnalysis: stored.config?.enableTabAnalysis ?? true,
         enableAiChatMode: stored.config?.enableAiChatMode ?? true,
         debugMode: stored.config?.debugMode || false,
         blockedSensitiveFields: stored.config?.blockedSensitiveFields || [
           'password', 'passwd', 'pwd', 'credit-card', 'creditcard', 'ssn', 'bank', 'pin', 'cvv', 'api-key', 'token'
-        ]
+        ],
+        blockedDomains: stored.config?.blockedDomains || DEFAULT_BLOCKED_DOMAINS
       };
 
       this.initialized = true;
@@ -42,13 +45,23 @@ class ConfigManager {
     return this.config.groqApiKey;
   }
 
-  async setApiKey(apiKey) {
+  validateApiKey(apiKey) {
     if (!apiKey || typeof apiKey !== 'string') {
-      throw new Error('Invalid API key');
+      return { valid: false, error: 'Invalid API key' };
     }
-
     if (!apiKey.startsWith('gsk_')) {
-      throw new Error('Invalid format. Groq keys start with "gsk_"');
+      return { valid: false, error: 'Invalid format. Groq API keys start with "gsk_"' };
+    }
+    if (apiKey.length < 10) {
+      return { valid: false, error: 'API key is too short' };
+    }
+    return { valid: true };
+  }
+
+  async setApiKey(apiKey) {
+    const validation = this.validateApiKey(apiKey);
+    if (!validation.valid) {
+      throw new Error(validation.error);
     }
 
     await chrome.storage.local.set({ groqApiKey: apiKey });
@@ -61,9 +74,31 @@ class ConfigManager {
 
   async update(updates) {
     const currentConfig = await chrome.storage.local.get('config');
-    const newConfig = { ...currentConfig.config, ...updates };
+    const newConfig = this._deepMerge(currentConfig.config || {}, updates);
     await chrome.storage.local.set({ config: newConfig });
-    this.config = { ...this.config, ...updates };
+    this.config = this._deepMerge(this.config || {}, updates);
+  }
+
+  /**
+   * Recursively merge source into target, preserving nested keys not in source.
+   */
+  _deepMerge(target, source) {
+    const result = { ...target };
+    for (const key of Object.keys(source)) {
+      if (
+        source[key] &&
+        typeof source[key] === 'object' &&
+        !Array.isArray(source[key]) &&
+        target[key] &&
+        typeof target[key] === 'object' &&
+        !Array.isArray(target[key])
+      ) {
+        result[key] = this._deepMerge(target[key], source[key]);
+      } else {
+        result[key] = source[key];
+      }
+    }
+    return result;
   }
 
   isConfigured() {
@@ -78,9 +113,22 @@ class ConfigManager {
   }
 
   async clear() {
-    await chrome.storage.local.clear();
+    await chrome.storage.local.remove(['config', 'groqApiKey', 'sessionIntent', 'pastSearches', 'extensionEnabled']);
     this.config = null;
     this.initialized = false;
+  }
+
+  getBlockedDomains() {
+    return this.config?.blockedDomains || DEFAULT_BLOCKED_DOMAINS;
+  }
+
+  async setBlockedDomains(domains) {
+    if (!Array.isArray(domains)) {
+      throw new Error('Blocked domains must be an array');
+    }
+    const cleaned = domains.map(d => d.toLowerCase().trim()).filter(Boolean);
+    await this.update({ blockedDomains: cleaned });
+    return cleaned;
   }
 }
 

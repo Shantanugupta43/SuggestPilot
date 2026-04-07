@@ -9,9 +9,9 @@ import groqService from '../services/groq-service.js';
 import contextCollector from '../services/context-collector.js';
 import sessionTracker from '../services/session-tracker.js';
 import formDetector from '../services/form-detector.js';
+import { MAX_PAST_SEARCHES } from '../utils/constants.js';
 
 chrome.runtime.onInstalled.addListener(async () => {
-  console.log('AI Context Assistant installed');
   await configManager.initialize();
   chrome.action.setBadgeText({ text: '' });
   chrome.action.setBadgeBackgroundColor({ color: '#4A90E2' });
@@ -63,8 +63,8 @@ async function handleMessage(request, sender) {
 
     case 'testConnection':
       await configManager.initialize();
-      const isConnected = await groqService.testConnection();
-      return { success: isConnected };
+      const result = await groqService.testConnection();
+      return result;
 
     case 'clearConfig':
       await configManager.clear();
@@ -73,6 +73,15 @@ async function handleMessage(request, sender) {
 
     case 'getSessionIntent':
       return { success: true, intent: await sessionTracker.getIntentContext() };
+
+    case 'getBlockedDomains':
+      await configManager.initialize();
+      return { success: true, domains: configManager.getBlockedDomains() };
+
+    case 'setBlockedDomains':
+      await configManager.initialize();
+      const domains = await configManager.setBlockedDomains(data.domains);
+      return { success: true, domains };
 
     default:
       throw new Error(`Unknown action: ${action}`);
@@ -170,10 +179,8 @@ async function storePastSearch(query, suggestions) {
     const stored = await chrome.storage.local.get('pastSearches');
     const pastSearches = stored.pastSearches || [];
     pastSearches.unshift({ query, suggestions, timestamp: Date.now() });
-    await chrome.storage.local.set({ pastSearches: pastSearches.slice(0, 50) });
+    await chrome.storage.local.set({ pastSearches: pastSearches.slice(0, MAX_PAST_SEARCHES) });
   } catch (error) {
     console.error('Storage error:', error);
   }
 }
-
-console.log('Service worker loaded - Groq Cloud Edition + Session Tracking + Form Fill');
