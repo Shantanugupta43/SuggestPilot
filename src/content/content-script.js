@@ -4,25 +4,26 @@
  * + Session-aware suggestion labels
  */
 
-(function() {
-  'use strict';
+import { detectOS, detectBrowser } from '../utils/browser-detector.js';
+import { isSpokenLanguageField } from '../utils/language-detector.js';
+import { DEBOUNCE_MS, ADDRESS_BAR_DEBOUNCE_MS, MAX_CANDIDATE_SLICE, MAX_FIELD_HEADING_SLICE } from '../utils/constants.js';
 
-  let currentInput = null;
-  let suggestionOverlay = null;
-  let currentSuggestions = [];
-  let activeSuggestionIndex = 0;
-  let debounceTimer = null;
-  let lastInputValue = '';
-  let isAddressBar = false;
-  let extensionEnabled = true;
+let currentInput = null;
+let suggestionOverlay = null;
+let currentSuggestions = [];
+let activeSuggestionIndex = 0;
+let debounceTimer = null;
+let lastInputValue = '';
+let isAddressBar = false;
+let extensionEnabled = true;
 
-  // Sites where the extension should stay completely silent
-  const BLOCKED_DOMAINS = [
-    'linkedin.com'
-  ];
+// Sites where the extension should stay completely silent
+const BLOCKED_DOMAINS = [
+  'linkedin.com'
+];
 
-  // ── Form-fill detector (inline, no import needed in content scripts) ────────
-  const FORM_FIELD_PATTERNS = {
+// ── Form-fill detector ────────
+const FORM_FIELD_PATTERNS = {
     // Sensitive must be checked 
     sensitive: ['password', 'passwd', 'pwd', 'credit', 'card', 'cvv', 'cvc', 'ssn', 'bank', 'pin', 'otp', 'auth', 'token', 'secret', 'email', 'e_mail', 'mail'],
     job_title: ['job_title', 'jobtitle', 'position', 'role', 'designation', 'occupation', 'job_role'],
@@ -76,66 +77,11 @@
     return null;
   }
 
-  function detectOS() {
-    const ua = navigator.userAgent;
-    if (/Windows NT 11/.test(ua)) return 'Windows 11';
-    if (/Windows NT 10/.test(ua)) return 'Windows 10';
-    if (/Mac OS X/.test(ua)) { const v = ua.match(/Mac OS X ([\d_]+)/); return v ? `macOS ${v[1].replace(/_/g,'.')}` : 'macOS'; }
-    if (/Linux/.test(ua)) return 'Linux';
-    if (/Android/.test(ua)) { const v = ua.match(/Android ([\d.]+)/); return v ? `Android ${v[1]}` : 'Android'; }
-    if (/iPhone|iPad/.test(ua)) return 'iOS';
-    return null;
-  }
-
-  function detectBrowser() {
-    const ua = navigator.userAgent;
-    if (/Edg\//.test(ua)) { const v = ua.match(/Edg\/([\d.]+)/); return `Edge ${v ? v[1].split('.')[0] : ''}`.trim(); }
-    if (/OPR\//.test(ua)) { const v = ua.match(/OPR\/([\d.]+)/); return `Opera ${v ? v[1].split('.')[0] : ''}`.trim(); }
-    if (/Chrome\//.test(ua)) { const v = ua.match(/Chrome\/([\d.]+)/); return `Chrome ${v ? v[1].split('.')[0] : ''}`.trim(); }
-    if (/Firefox\//.test(ua)) { const v = ua.match(/Firefox\/([\d.]+)/); return `Firefox ${v ? v[1].split('.')[0] : ''}`.trim(); }
-    if (/Safari\//.test(ua)) return 'Safari';
-    return null;
-  }
-
   function normalizeCandidateValue(value) {
     return (value || '')
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, ' ')
       .trim();
-  }
-
-  function isSpokenLanguageField(combined) {
-    const explicitPatterns = [
-      'spoken_language',
-      'preferred_language',
-      'language_preference',
-      'native_language',
-      'mother_tongue',
-      'languages_spoken'
-    ];
-
-    if (explicitPatterns.some(pattern => combined.includes(pattern))) {
-      return true;
-    }
-
-    if (!/(?:^|_)(language|languages)(?:_|$)/.test(combined)) {
-      return false;
-    }
-
-    const technicalPatterns = [
-      'coding_language',
-      'programming_language',
-      'query_language',
-      'language_style',
-      'primary_language',
-      'secondary_language',
-      'source_language',
-      'target_language',
-      'language_code',
-      'locale'
-    ];
-
-    return !technicalPatterns.some(pattern => combined.includes(pattern));
   }
 
   function matchesLanguageOption(optionNormalized, variation) {
@@ -239,7 +185,7 @@
       }
     });
 
-    return candidates.slice(0, 3);
+    return candidates.slice(0, MAX_CANDIDATE_SLICE);
   }
 
   /**
@@ -313,7 +259,7 @@
 
     if ((fieldType === 'pronouns' || fieldType === 'education') && element.tagName?.toLowerCase() === 'select') {
       const optionCandidates = createCandidateList(
-        collectFieldOptions(element).slice(0, 3),
+        collectFieldOptions(element).slice(0, MAX_CANDIDATE_SLICE),
         'Available form options',
         0.65
       );
@@ -379,7 +325,6 @@
 
   async function initialize() {
     if (isBlockedDomain()) {
-      console.log('AI Context Assistant: disabled on', window.location.hostname);
       return;
     }
     await loadExtensionState();
@@ -387,7 +332,6 @@
     setupMessageListener();
     createSuggestionOverlay();
     setupAddressBarDetection();
-    console.log('AI Context Assistant - Session+FormFill mode active');
   }
 
   function createSuggestionOverlay() {
@@ -593,7 +537,7 @@
       return;
     }
     showSuggestionLoading(input);
-    const delay = isAddressBar ? 400 : 500;
+    const delay = isAddressBar ? ADDRESS_BAR_DEBOUNCE_MS : DEBOUNCE_MS;
     debounceTimer = setTimeout(() => generateSuggestions(input, value), delay);
   }
 
@@ -615,7 +559,7 @@
           title: document.title,
           url: window.location.href,
           headings: Array.from(document.querySelectorAll('h1, h2, h3'))
-            .slice(0, 5).map(h => h.textContent.trim()).filter(Boolean)
+            .slice(0, MAX_FIELD_HEADING_SLICE).map(h => h.textContent.trim()).filter(Boolean)
         },
         is_address_bar: isAddressBar,
         is_ai_chat: window.location.href.includes('claude.ai') || window.location.href.includes('chat.openai.com')
@@ -633,7 +577,7 @@
 
       // Stale check
       const currentValue = getInputValue(input);
-      if (currentValue !== value) { console.log('Stale result discarded'); return; }
+      if (currentValue !== value) { return; }
 
       if (response && response.success) {
         const suggestions = response.suggestions || [];
@@ -869,4 +813,3 @@
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => initialize());
   else initialize();
-})();

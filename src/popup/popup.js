@@ -3,42 +3,11 @@
  * Handles UI interactions and communication with background script
  */
 
-// Views
-const views = {
-  notConfigured: document.getElementById('notConfiguredView'),
-  main: document.getElementById('mainView'),
-  settings: document.getElementById('settingsView')
-};
+import { STATUS_MESSAGE_TIMEOUT, SETTINGS_VIEW_DELAY } from '../utils/constants.js';
 
-// Elements
-const elements = {
-  // Main view
-  statusBar: document.getElementById('statusBar'),
-  statusText: document.getElementById('statusText'),
-  loadingState: document.getElementById('loadingState'),
-  emptyState: document.getElementById('emptyState'),
-  suggestionsList: document.getElementById('suggestionsList'),
-  refreshBtn: document.getElementById('refreshBtn'),
-  
-  // Toggle
-  extensionToggle: document.getElementById('extensionToggle'),
-  toggleStatus: document.getElementById('toggleStatus'),
-  
-  // Settings view
-  settingsBtn: document.getElementById('settingsBtn'),
-  backBtn: document.getElementById('backBtn'),
-  goToSettingsBtn: document.getElementById('goToSettingsBtn'),
-  apiKeyInput: document.getElementById('apiKeyInput'),
-  toggleApiKeyBtn: document.getElementById('toggleApiKeyBtn'),
-  modelSelect: document.getElementById('modelSelect'),
-  testConnectionBtn: document.getElementById('testConnectionBtn'),
-  connectionStatus: document.getElementById('connectionStatus'),
-  enableHistoryTracking: document.getElementById('enableHistoryTracking'),
-  enableTabAnalysis: document.getElementById('enableTabAnalysis'),
-  enableAiChatMode: document.getElementById('enableAiChatMode'),
-  saveSettingsBtn: document.getElementById('saveSettingsBtn'),
-  clearDataBtn: document.getElementById('clearDataBtn')
-};
+// Views and elements — declared here, initialized inside initialize() after DOM is ready
+let views = {};
+let elements = {};
 
 // State
 let currentConfig = { isConfigured: false, model: "llama-3.1-8b-instant", enableHistoryTracking: true, enableTabAnalysis: true, enableAiChatMode: true };
@@ -49,6 +18,42 @@ let extensionEnabled = true;
  * Initialize popup
  */
 async function initialize() {
+  // Initialize views and elements after DOM is guaranteed ready
+  views = {
+    notConfigured: document.getElementById('notConfiguredView'),
+    main: document.getElementById('mainView'),
+    settings: document.getElementById('settingsView')
+  };
+
+  elements = {
+    // Main view
+    statusBar: document.getElementById('statusBar'),
+    statusText: document.getElementById('statusText'),
+    loadingState: document.getElementById('loadingState'),
+    emptyState: document.getElementById('emptyState'),
+    suggestionsList: document.getElementById('suggestionsList'),
+    refreshBtn: document.getElementById('refreshBtn'),
+
+    // Toggle
+    extensionToggle: document.getElementById('extensionToggle'),
+    toggleStatus: document.getElementById('toggleStatus'),
+
+    // Settings view
+    settingsBtn: document.getElementById('settingsBtn'),
+    backBtn: document.getElementById('backBtn'),
+    goToSettingsBtn: document.getElementById('goToSettingsBtn'),
+    apiKeyInput: document.getElementById('apiKeyInput'),
+    toggleApiKeyBtn: document.getElementById('toggleApiKeyBtn'),
+    modelSelect: document.getElementById('modelSelect'),
+    testConnectionBtn: document.getElementById('testConnectionBtn'),
+    connectionStatus: document.getElementById('connectionStatus'),
+    enableHistoryTracking: document.getElementById('enableHistoryTracking'),
+    enableTabAnalysis: document.getElementById('enableTabAnalysis'),
+    enableAiChatMode: document.getElementById('enableAiChatMode'),
+    saveSettingsBtn: document.getElementById('saveSettingsBtn'),
+    clearDataBtn: document.getElementById('clearDataBtn')
+  };
+
   try {
     await loadConfig();
     await loadExtensionState();
@@ -234,7 +239,7 @@ async function insertSuggestion(text) {
     
     if (response.success) {
       showStatus('Suggestion inserted', 'success');
-      setTimeout(() => window.close(), 1000);
+      setTimeout(() => window.close(), SETTINGS_VIEW_DELAY);
     } else {
       showStatus('Failed to insert suggestion', 'error');
     }
@@ -313,32 +318,54 @@ async function toggleExtension() {
 
 /**
  * dark mode toggle
- *  */ 
+ *  */
 
 const sign = document.getElementById('text');
 const outer = document.getElementById("outerbox");
 const inner = document.getElementById("innerbox");
-const text =document.getElementById("darkmode")
+const text = document.getElementById("darkmode");
 
-function changeText() {
-  if (sign.textContent == "X") {
+function setDarkMode(enabled) {
+  if (!sign || !outer || !inner || !text) return;
+
+  if (enabled) {
     sign.textContent = "✔";
-    outer.classList.toggle("active");
-    inner.classList.toggle("active");
+    outer.classList.add("active");
+    inner.classList.add("active");
     document.body.classList.add('dark');
-    text.classList.toggle("active");
-    
-
+    text.classList.add("active");
   } else {
     sign.textContent = "X";
-    outer.classList.toggle("active");
-    inner.classList.toggle("active");
+    outer.classList.remove("active");
+    inner.classList.remove("active");
     document.body.classList.remove('dark');
-     text.classList.toggle("active");
+    text.classList.remove("active");
   }
 }
 
-outer.addEventListener('click', changeText);
+async function loadDarkModePreference() {
+  try {
+    const stored = await chrome.storage.local.get('darkModeEnabled');
+    if (stored.darkModeEnabled) {
+      setDarkMode(true);
+    }
+  } catch (error) {
+    console.error('Failed to load dark mode preference:', error);
+  }
+}
+
+async function toggleDarkMode() {
+  const isDark = document.body.classList.contains('dark');
+  const newState = !isDark;
+  setDarkMode(newState);
+  try {
+    await chrome.storage.local.set({ darkModeEnabled: newState });
+  } catch (error) {
+    console.error('Failed to save dark mode preference:', error);
+  }
+}
+
+if (outer) outer.addEventListener('click', toggleDarkMode);
 
 
 
@@ -363,7 +390,7 @@ function showStatus(message, type = 'info') {
   
   setTimeout(() => {
     elements.statusBar.classList.add('hidden');
-  }, 5000);
+  }, STATUS_MESSAGE_TIMEOUT);
 }
 
 /**
@@ -394,23 +421,24 @@ async function testConnection() {
     elements.testConnectionBtn.disabled = true;
     elements.testConnectionBtn.textContent = 'Testing...';
     elements.connectionStatus.classList.add('hidden');
-    
-    const response = await chrome.runtime.sendMessage({ 
-      action: 'testConnection' 
+
+    const response = await chrome.runtime.sendMessage({
+      action: 'testConnection'
     });
-    
+
     elements.connectionStatus.classList.remove('hidden');
-    
+
     if (response.success) {
       elements.connectionStatus.textContent = '✔ Connection successful';
       elements.connectionStatus.className = 'connection-status success';
     } else {
-      elements.connectionStatus.textContent = '✗ Connection failed';
+      const errorMessage = response.error || 'Connection failed';
+      elements.connectionStatus.textContent = `✗ ${errorMessage}`;
       elements.connectionStatus.className = 'connection-status error';
     }
   } catch (error) {
     elements.connectionStatus.classList.remove('hidden');
-    elements.connectionStatus.textContent = '✗ Connection failed: ' + error.message;
+    elements.connectionStatus.textContent = `✗ Connection failed: ${error.message}`;
     elements.connectionStatus.className = 'connection-status error';
   } finally {
     elements.testConnectionBtn.disabled = false;
@@ -425,14 +453,18 @@ async function saveSettings() {
   try {
     elements.saveSettingsBtn.disabled = true;
     elements.saveSettingsBtn.textContent = 'Saving...';
-    
-    // Save API key if provided
+
+    // Validate and save API key if provided
     const apiKey = elements.apiKeyInput.value.trim();
     if (apiKey) {
-      await chrome.runtime.sendMessage({
+      const keyResponse = await chrome.runtime.sendMessage({
         action: 'setApiKey',
         data: { apiKey }
       });
+      if (!keyResponse.success) {
+        showStatus(keyResponse.error || 'Failed to save API key', 'error');
+        return;
+      }
       elements.apiKeyInput.value = '';
     }
     
@@ -453,7 +485,7 @@ async function saveSettings() {
     await loadConfig();
     
     if (currentConfig.isConfigured) {
-      setTimeout(() => showView('main'), 1000);
+      setTimeout(() => showView('main'), SETTINGS_VIEW_DELAY);
     }
   } catch (error) {
     console.error('Failed to save settings:', error);
@@ -487,4 +519,7 @@ async function clearData() {
 } 
 
 // Initialize on load
-document.addEventListener('DOMContentLoaded', initialize);
+document.addEventListener('DOMContentLoaded', async () => {
+  await loadDarkModePreference();
+  initialize();
+});

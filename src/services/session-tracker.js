@@ -13,15 +13,14 @@
  *   clearSession()                       → void
  */
 
+import { SESSION_TTL_MS, MAX_QUERIES, SUMMARY_REBUILD_INTERVAL, MAX_RECENT_THREAD, MAX_THREAD_TEXT_LENGTH } from '../utils/constants.js';
+
 class SessionTracker {
   constructor() {
     this.STORAGE_KEY = 'sessionIntent';
-    // Session expires after 2 hours of inactivity
-    this.SESSION_TTL_MS = 2 * 60 * 60 * 1000;
-    // Keep at most this many queries in the rolling window
-    this.MAX_QUERIES = 20;
-    // Rebuild the summary after this many new queries
-    this.SUMMARY_REBUILD_INTERVAL = 5;
+    this.SESSION_TTL_MS = SESSION_TTL_MS;
+    this.MAX_QUERIES = MAX_QUERIES;
+    this.SUMMARY_REBUILD_INTERVAL = SUMMARY_REBUILD_INTERVAL;
   }
 
   // ── Public API ──────────────────────────────────────────────────────────────
@@ -145,7 +144,7 @@ class SessionTracker {
    */
   _buildRecentThread(queries) {
     return queries
-      .slice(-5)
+      .slice(-MAX_RECENT_THREAD)
       .map(q => q.text.slice(0, 60))
       .join(' → ');
   }

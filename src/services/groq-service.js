@@ -5,11 +5,18 @@
  */
 
 import configManager from '../config/config-manager.js';
+import {
+  GROQ_BASE_URL, GROQ_MODEL, MAX_TOKENS, TEMPERATURE, TOP_P,
+  TEST_MAX_TOKENS, TEST_TEMPERATURE, MAX_SUGGESTIONS,
+  MAX_THREAD_TEXT_LENGTH,
+  MIN_SUGGESTION_LENGTH, MAX_SUGGESTION_LENGTH,
+  PROMPT_TAB_COUNT, PROMPT_HISTORY_COUNT, PROMPT_TITLE_SLICE, PROMPT_PAGE_TITLE_SLICE
+} from '../utils/constants.js';
 
 class GroqService {
   constructor() {
-    this.baseURL = 'https://api.groq.com/openai/v1';
-    this.model = 'llama-3.1-8b-instant';
+    this.baseURL = GROQ_BASE_URL;
+    this.model = GROQ_MODEL;
   }
 
   async generateSuggestions(context) {
@@ -35,10 +42,6 @@ class GroqService {
       const systemPrompt = context.fieldMeta?.fieldType
         ? this.getFormFillSystemPrompt()
         : this.getContextAwareSystemPrompt();
-
-      console.log('Generating for:', context.active_input_text);
-      console.log('Session intent:', context.sessionIntent?.sessionSummary || 'none');
-      console.log('Form field:', context.fieldMeta?.fieldType || 'none');
 
       const result = await this.callWithRetry(apiKey, prompt, systemPrompt);
       return context.fieldMeta?.fieldType
@@ -79,9 +82,9 @@ class GroqService {
           { role: 'system', content: systemPrompt },
           { role: 'user', content: prompt }
         ],
-        temperature: 0.4,
-        max_tokens: 200,
-        top_p: 0.9
+        temperature: TEMPERATURE,
+        max_tokens: MAX_TOKENS,
+        top_p: TOP_P
       })
     });
 
@@ -119,24 +122,24 @@ class GroqService {
     }
     if (context.sessionIntent?.recentThread) {
       // Truncate to keep tokens tight
-      const thread = context.sessionIntent.recentThread.slice(0, 120);
+      const thread = context.sessionIntent.recentThread.slice(0, MAX_THREAD_TEXT_LENGTH);
       parts.push(`THREAD:${thread}`);
     }
 
-    // Other tabs — 2 max
+    // Other tabs — PROMPT_TAB_COUNT max
     if (context.active_tabs?.length > 0) {
       const tabs = context.active_tabs
-        .slice(0, 2)
-        .map(t => `"${t.title.slice(0, 40)}"`)
+        .slice(0, PROMPT_TAB_COUNT)
+        .map(t => `"${t.title.slice(0, PROMPT_TITLE_SLICE)}"`)
         .join(', ');
       parts.push(`TABS:${tabs}`);
     }
 
-    // Recent history — 2 max
+    // Recent history — PROMPT_HISTORY_COUNT max
     if (context.recent_history?.length > 0) {
       const hist = context.recent_history
-        .slice(0, 2)
-        .map(t => `"${t.title.slice(0, 40)}"`)
+        .slice(0, PROMPT_HISTORY_COUNT)
+        .map(t => `"${t.title.slice(0, PROMPT_TITLE_SLICE)}"`)
         .join(', ');
       parts.push(`HIST:${hist}`);
     }
@@ -167,7 +170,7 @@ class GroqService {
 
     // Include page context for issue_subject
     if (context.fieldMeta?.pageTitle) {
-      parts.push(`PAGE_TITLE:"${context.fieldMeta.pageTitle.slice(0, 80)}"`);
+      parts.push(`PAGE_TITLE:"${context.fieldMeta.pageTitle.slice(0, PROMPT_PAGE_TITLE_SLICE)}"`);
     }
 
     if (context.sessionIntent?.sessionSummary) {
@@ -175,8 +178,8 @@ class GroqService {
     }
     if (context.active_tabs?.length > 0) {
       const tabs = context.active_tabs
-        .slice(0, 2)
-        .map(t => `"${t.title.slice(0, 40)}"`)
+        .slice(0, PROMPT_TAB_COUNT)
+        .map(t => `"${t.title.slice(0, PROMPT_TITLE_SLICE)}"`)
         .join(', ');
       parts.push(`TABS:${tabs}`);
     }
@@ -215,16 +218,15 @@ Format:
 {"reason":"Smart form fill","suggestions":[{"text":"suggested value","derivation":"source of this suggestion"},{"text":"alternative value","derivation":"source"}]}`;
   }
 
-  // ─── Response parsing (unchanged from original) ────────────────────────────
+  // ─── Response parsing ──────────────────────────────────────────────────────
 
-  parseResponse(content) {
-    let cleaned = content.trim();
-    cleaned = cleaned.replace(/^```json\s*/i, '').replace(/^```\s*/, '');
-    cleaned = cleaned.replace(/```\s*$/, '');
-    cleaned = cleaned.trim();
-
+  /**
+   * Parse a JSON string and return structured suggestion data.
+   * Returns null if the string is not valid JSON or lacks suggestions.
+   */
+  _parseAndValidate(jsonString) {
     try {
-      const parsed = JSON.parse(cleaned);
+      const parsed = JSON.parse(jsonString);
       if (parsed && typeof parsed === 'object') {
         if (Array.isArray(parsed.suggestions) && parsed.suggestions.length > 0) {
           const suggestions = this.validateSuggestions(parsed.suggestions);
@@ -241,33 +243,27 @@ Format:
           }
         }
       }
-    } catch (parseError) {
-      console.log('Direct JSON parse failed:', parseError.message);
+    } catch {
+      // Invalid JSON or unexpected structure
     }
+    return null;
+  }
 
+  parseResponse(content) {
+    let cleaned = content.trim();
+    cleaned = cleaned.replace(/^```json\s*/i, '').replace(/^```\s*/, '');
+    cleaned = cleaned.replace(/```\s*$/, '');
+    cleaned = cleaned.trim();
+
+    // Try direct parse first
+    const directResult = this._parseAndValidate(cleaned);
+    if (directResult) return directResult;
+
+    // Fallback: extract JSON block via regex
     const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
-      try {
-        const parsed = JSON.parse(jsonMatch[0]);
-        if (parsed && typeof parsed === 'object') {
-          if (Array.isArray(parsed.suggestions) && parsed.suggestions.length > 0) {
-            const suggestions = this.validateSuggestions(parsed.suggestions);
-            const normalized = suggestions.map(s => ({
-              text: s.text || s,
-              derivation: s.derivation || 'Based on context'
-            }));
-            const validated = this.validateSuggestionOrdering(normalized);
-            if (validated.length > 0) {
-              return {
-                reason: parsed.reason || 'Based on your browsing context',
-                suggestions: validated
-              };
-            }
-          }
-        }
-      } catch (e) {
-        console.log('JSON extraction failed:', e.message);
-      }
+      const regexResult = this._parseAndValidate(jsonMatch[0]);
+      if (regexResult) return regexResult;
     }
 
     console.error('AI did not return proper JSON format');
@@ -292,13 +288,13 @@ Format:
       .filter(s => {
         if (!s || !s.text) return false;
         const text = s.text;
-        if (text.length < 3 || text.length > 200) return false;
+        if (text.length < MIN_SUGGESTION_LENGTH || text.length > MAX_SUGGESTION_LENGTH) return false;
         if (/^[{}\[\]"'`]+$/.test(text)) return false;
         if (text.toLowerCase().includes('reason:')) return false;
         if (text.toLowerCase().includes('suggestions:')) return false;
         return true;
       })
-      .slice(0, 3);
+      .slice(0, MAX_SUGGESTIONS);
   }
 
   validateSuggestionOrdering(suggestions) {
@@ -328,14 +324,33 @@ Format:
             { role: 'system', content: 'Respond with only: {"status": "ok"}' },
             { role: 'user', content: 'test' }
           ],
-          max_tokens: 20,
-          temperature: 0
+          max_tokens: TEST_MAX_TOKENS,
+          temperature: TEST_TEMPERATURE
         })
       });
-      return response.ok;
+
+      if (!response.ok) {
+        let errorMessage = `API Error: ${response.status}`;
+        try {
+          const errorBody = await response.json();
+          if (response.status === 401) {
+            errorMessage = 'Invalid API key';
+          } else if (response.status === 429) {
+            errorMessage = 'Rate limited — try again later';
+          } else if (errorBody.error?.message) {
+            errorMessage = errorBody.error.message;
+          }
+        } catch {
+          // If we can't parse the error body, fall back to status-based message
+          if (response.status === 401) errorMessage = 'Invalid API key';
+          else if (response.status === 429) errorMessage = 'Rate limited — try again later';
+        }
+        return { success: false, error: errorMessage };
+      }
+
+      return { success: true };
     } catch (error) {
-      console.error('API connection test failed:', error);
-      return false;
+      return { success: false, error: `Connection failed: ${error.message}` };
     }
   }
 
