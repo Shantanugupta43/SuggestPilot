@@ -5,21 +5,38 @@
  * context-aware, session-continuity suggestions.
  *
  * Storage key: 'sessionIntent'
- * Shape: { queries: [{text, suggestions, timestamp}], sessionSummary: string, recentThread: string, startedAt: number }
+ *
+ * @typedef {Object} SessionData
+ * @property {Array<{text: string, suggestions: string[], timestamp: number}>} queries - Recorded queries
+ * @property {string} sessionSummary - Human-readable research summary
+ * @property {string} recentThread - Arrow-separated string of recent queries
+ * @property {number} startedAt - Session start timestamp
+ * @property {number} updatedAt - Last activity timestamp
+ *
+ * @typedef {Object} IntentContext
+ * @property {string} sessionSummary - Research summary string
+ * @property {string} recentThread - Recent query thread
  *
  * Public API (all async):
  *   recordQuery(queryText, suggestions)  → void
- *   getIntentContext()                   → { sessionSummary, recentThread }
+ *   getIntentContext()                   → IntentContext
  *   clearSession()                       → void
  */
 
 import { SESSION_TTL_MS, MAX_QUERIES, SUMMARY_REBUILD_INTERVAL, MAX_RECENT_THREAD, MAX_THREAD_TEXT_LENGTH } from '../utils/constants.js';
 
+/**
+ * Tracks research session intent for context-aware suggestions.
+ */
 class SessionTracker {
   constructor() {
+    /** @type {string} */
     this.STORAGE_KEY = 'sessionIntent';
+    /** @type {number} */
     this.SESSION_TTL_MS = SESSION_TTL_MS;
+    /** @type {number} */
     this.MAX_QUERIES = MAX_QUERIES;
+    /** @type {number} */
     this.SUMMARY_REBUILD_INTERVAL = SUMMARY_REBUILD_INTERVAL;
   }
 
@@ -27,8 +44,9 @@ class SessionTracker {
 
   /**
    * Record a new query into the session and update the intent summary.
-   * @param {string} queryText
-   * @param {Array}  suggestions  - the suggestions returned for this query (stored for future context)
+   * @param {string} queryText - The text the user typed
+   * @param {Array<string|{text: string}>} suggestions - Suggestions returned for this query
+   * @returns {Promise<void>}
    */
   async recordQuery(queryText, suggestions = []) {
     if (!queryText || typeof queryText !== 'string') return;
@@ -64,7 +82,7 @@ class SessionTracker {
 
   /**
    * Return the intent context object expected by groq-service.
-   * @returns {{ sessionSummary: string, recentThread: string }}
+   * @returns {Promise<IntentContext>}
    */
   async getIntentContext() {
     try {
@@ -81,6 +99,7 @@ class SessionTracker {
 
   /**
    * Wipe the stored session.
+   * @returns {Promise<void>}
    */
   async clearSession() {
     try {
@@ -94,6 +113,8 @@ class SessionTracker {
 
   /**
    * Load session from storage, creating a fresh one if missing or expired.
+   * @returns {Promise<SessionData>}
+   * @private
    */
   async _loadSession() {
     try {
@@ -123,10 +144,21 @@ class SessionTracker {
     }
   }
 
+  /**
+   * Save session to chrome.storage.local.
+   * @param {SessionData} session - The session object to persist
+   * @returns {Promise<void>}
+   * @private
+   */
   async _saveSession(session) {
     await chrome.storage.local.set({ [this.STORAGE_KEY]: session });
   }
 
+  /**
+   * Create a fresh empty session object.
+   * @returns {SessionData}
+   * @private
+   */
   _freshSession() {
     return {
       queries: [],
@@ -138,9 +170,11 @@ class SessionTracker {
   }
 
   /**
-   * Build a short readable string of the last 5 query texts.
+   * Build a short readable string of the last queries.
    * Used as THREAD: in the groq prompt.
-   * Example: "react hooks → useEffect cleanup → memory leaks in react"
+   * @param {Array<{text: string}>} queries - Array of query objects
+   * @returns {string} Arrow-separated query thread
+   * @private
    */
   _buildRecentThread(queries) {
     return queries
@@ -152,7 +186,9 @@ class SessionTracker {
   /**
    * Build a one-line summary of what the user is researching this session.
    * Uses simple keyword frequency — no API call needed.
-   * Example: "Researching: react, hooks, performance, useEffect"
+   * @param {Array<{text: string}>} queries - Array of query objects
+   * @returns {string} Summary like "Researching: react, hooks, performance"
+   * @private
    */
   _buildSessionSummary(queries) {
     if (queries.length === 0) return '';

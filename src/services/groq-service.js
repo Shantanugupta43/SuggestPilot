@@ -1,7 +1,33 @@
 /**
- * Enhanced Groq API Service
- * + Session Intent Tracking in prompt
- * + Smart Form-Fill mode
+ * Groq API Service
+ * Handles API calls, prompt building, response parsing, and suggestion validation.
+ *
+ * @typedef {Object} Suggestion
+ * @property {string} text - The suggestion text
+ * @property {string} derivation - Explanation of where the suggestion came from
+ *
+ * @typedef {Object} SuggestionResponse
+ * @property {string} reason - Why these suggestions were generated
+ * @property {Suggestion[]} suggestions - Array of suggestions
+ * @property {boolean} [isFormFill] - Whether this is a form-fill response
+ * @property {string} [error] - Error message if any
+ *
+ * @typedef {Object} FieldMeta
+ * @property {string} fieldType - Classified field type
+ * @property {string} fieldLabel - Human-readable label
+ * @property {Array<{value: string, source: string, confidence: number}>} candidates - Pre-fill candidates
+ * @property {boolean} isFormFill - Whether this is a form field
+ * @property {string} [pageTitle] - Current page title
+ * @property {string} [pageUrl] - Current page URL
+ *
+ * @typedef {Object} GenerationContext
+ * @property {string} active_input_text - Current input value
+ * @property {string} [page_type] - Detected page type
+ * @property {Object} [current_page] - Current page info
+ * @property {Array} [active_tabs] - Open tabs context
+ * @property {Array} [recent_history] - Browsing history context
+ * @property {Object} [sessionIntent] - Session intent context
+ * @property {FieldMeta} [fieldMeta] - Form field metadata
  */
 
 import configManager from '../config/config-manager.js';
@@ -13,13 +39,19 @@ import {
   PROMPT_TAB_COUNT, PROMPT_HISTORY_COUNT, PROMPT_TITLE_SLICE, PROMPT_PAGE_TITLE_SLICE
 } from '../utils/constants.js';
 
+/**
+ * Groq API service for generating context-aware suggestions.
+ */
 class GroqService {
   constructor() {
+    /** @type {string} */
     this.baseURL = GROQ_BASE_URL;
   }
 
   /**
    * Resolve the model from configManager, falling back to the default.
+   * @returns {string} The model identifier
+   * @private
    */
   _resolveModel() {
     try {
@@ -29,6 +61,12 @@ class GroqService {
     }
   }
 
+  /**
+   * Generate suggestions based on the given context.
+   * Handles both form-fill mode (local candidates) and AI mode (Groq API).
+   * @param {GenerationContext} context - The generation context
+   * @returns {Promise<SuggestionResponse>}
+   */
   async generateSuggestions(context) {
     try {
       const apiKey = configManager.getApiKey();
@@ -64,7 +102,10 @@ class GroqService {
   }
 
   /**
-   * Build a form-fill response directly from local candidates (no API call needed)
+   * Build a form-fill response directly from local candidates (no API call needed).
+   * @param {FieldMeta} fieldMeta - Form field metadata with candidates
+   * @returns {SuggestionResponse}
+   * @private
    */
   _buildFormFillResponse(fieldMeta) {
     const suggestions = fieldMeta.candidates.map(c => ({
@@ -79,6 +120,15 @@ class GroqService {
     };
   }
 
+  /**
+   * Call the Groq API with automatic retry on 429.
+   * @param {string} apiKey - Groq API key
+   * @param {string} prompt - User prompt text
+   * @param {string} systemPrompt - System prompt text
+   * @param {number} [attempt] - Current retry attempt
+   * @returns {Promise<SuggestionResponse>}
+   * @private
+   */
   async callWithRetry(apiKey, prompt, systemPrompt, attempt = 0) {
     const response = await fetch(`${this.baseURL}/chat/completions`, {
       method: 'POST',
@@ -120,7 +170,9 @@ class GroqService {
   // ─── Prompt builders ───────────────────────────────────────────────────────
 
   /**
-   * Standard context-aware prompt — now includes session intent thread.
+   * Build a standard context-aware prompt with session intent, tabs, and history.
+   * @param {GenerationContext} context - The generation context
+   * @returns {string} Token-efficient prompt string
    */
   buildContextAwarePrompt(context) {
     const input = context.active_input_text || '';
@@ -158,7 +210,9 @@ class GroqService {
   }
 
   /**
-   * Form-field prompt — asks AI for field-specific suggestions.
+   * Build a form-field specific prompt with field type, label, and known values.
+   * @param {GenerationContext} context - The generation context
+   * @returns {string} Token-efficient prompt string
    */
   buildFormFieldPrompt(context) {
     const fieldType = context.fieldMeta?.fieldType || 'unknown';
@@ -199,6 +253,10 @@ class GroqService {
 
   // ─── System prompts ────────────────────────────────────────────────────────
 
+  /**
+   * Get the system prompt for context-aware search suggestions.
+   * @returns {string} System prompt text
+   */
   getContextAwareSystemPrompt() {
     return `Autocomplete assistant. Complete the user's query into a full natural question or search phrase using context from their session research thread (SESSION, THREAD), open tabs (TABS) and history (HIST).
 
@@ -214,6 +272,10 @@ Format:
 {"reason":"brief","suggestions":[{"text":"full natural question or search phrase","derivation":"source"},{"text":"full natural question or search phrase","derivation":"source"},{"text":"full natural question or search phrase","derivation":"source"}]}`;
   }
 
+  /**
+   * Get the system prompt for form-fill suggestions.
+   * @returns {string} System prompt text
+   */
   getFormFillSystemPrompt() {
     return `Form-fill assistant. The user is filling in a form field. Suggest 2-3 appropriate values for the given field type using context from their open tabs and session.
 
@@ -233,6 +295,9 @@ Format:
   /**
    * Parse a JSON string and return structured suggestion data.
    * Returns null if the string is not valid JSON or lacks suggestions.
+   * @param {string} jsonString - JSON string to parse
+   * @returns {SuggestionResponse|null}
+   * @private
    */
   _parseAndValidate(jsonString) {
     try {
@@ -259,6 +324,11 @@ Format:
     return null;
   }
 
+  /**
+   * Parse a JSON string and return structured suggestion data.
+   * @param {string} content - Raw response content (may include markdown)
+   * @returns {SuggestionResponse} Parsed suggestions or empty fallback
+   */
   parseResponse(content) {
     let cleaned = content.trim();
     cleaned = cleaned.replace(/^```json\s*/i, '').replace(/^```\s*/, '');
@@ -283,6 +353,12 @@ Format:
     };
   }
 
+  /**
+   * Validate and normalize an array of raw suggestions.
+   * Filters by length, removes invalid text, caps to MAX_SUGGESTIONS.
+   * @param {Array<string|Object>} suggestions - Raw suggestion items
+   * @returns {Suggestion[]} Normalized suggestions array
+   */
   validateSuggestions(suggestions) {
     if (!Array.isArray(suggestions)) return [];
     return suggestions
@@ -307,6 +383,11 @@ Format:
       .slice(0, MAX_SUGGESTIONS);
   }
 
+  /**
+   * Prefix derivation labels with Session/Context/Smart based on position.
+   * @param {Suggestion[]} suggestions - Array of suggestion objects
+   * @returns {Suggestion[]} Suggestions with enhanced derivation labels
+   */
   validateSuggestionOrdering(suggestions) {
     if (!Array.isArray(suggestions) || suggestions.length === 0) return suggestions;
     return suggestions.map((suggestion, index) => {
@@ -319,6 +400,10 @@ Format:
     });
   }
 
+  /**
+   * Test the Groq API connection with a minimal request.
+   * @returns {Promise<{success: boolean, error?: string}>}
+   */
   async testConnection() {
     try {
       const apiKey = configManager.getApiKey();
@@ -364,6 +449,10 @@ Format:
     }
   }
 
+  /**
+   * Get the list of available Groq models.
+   * @returns {string[]} Array of model identifiers
+   */
   getAvailableModels() {
     return ['llama-3.1-8b-instant'];
   }

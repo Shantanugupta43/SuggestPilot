@@ -1,6 +1,28 @@
 /**
  * Context Collector
- * Gathers browsing context from the current page and browser state
+ * Gathers browsing context from the current page and browser state.
+ *
+ * @typedef {Object} TabInfo
+ * @property {string} title - Tab title
+ * @property {string} url - Tab URL
+ * @property {number} [visitCount] - Number of visits
+ * @property {number} [lastVisitTime] - Last visit timestamp
+ * @property {string} [platform] - AI platform name (for AI tabs)
+ *
+ * @typedef {Object} PageContext
+ * @property {string} title - Page title
+ * @property {string} url - Page URL
+ * @property {string[]} headings - Page headings
+ *
+ * @typedef {Object} FullContext
+ * @property {PageContext} current_page - Current active page info
+ * @property {TabInfo[]} active_tabs - Other open tabs
+ * @property {string} active_input_text - Current input value
+ * @property {TabInfo[]} recent_history - Recent browsing history
+ * @property {TabInfo[]} top_visited_titles - Most visited sites
+ * @property {TabInfo[]} recent_ai_tabs - Recent AI chat tabs
+ * @property {Object} past_similar_searches - Past search history
+ * @property {string} page_type - Detected page type
  */
 
 import {
@@ -8,9 +30,13 @@ import {
   MAX_AI_TABS, MAX_HEADING_COUNT
 } from '../utils/constants.js';
 
+/**
+ * Collects browsing context for suggestion generation.
+ */
 class ContextCollector {
   /**
-   * Collect full context for suggestion generation
+   * Collect full context for suggestion generation.
+   * @returns {Promise<FullContext>}
    */
   async collectContext() {
     const context = {
@@ -28,7 +54,9 @@ class ContextCollector {
   }
 
   /**
-   * Get current page context (token optimized)
+   * Get current page context (title, URL, headings).
+   * Handles Chrome internal pages gracefully.
+   * @returns {Promise<PageContext>}
    */
   async getCurrentPageContext() {
     try {
@@ -66,8 +94,9 @@ class ContextCollector {
   }
 
   /**
-   * Get top 5 active tabs (token optimized)
-   * EXCLUDES the current active tab - only returns OTHER tabs user has open
+   * Get up to MAX_ACTIVE_TABS other open tabs (excluding current).
+   * Filters out sensitive domains.
+   * @returns {Promise<TabInfo[]>}
    */
   async getActiveTabsContext() {
     try {
@@ -104,7 +133,8 @@ class ContextCollector {
   }
 
   /**
-   * Get active input text from focused element
+   * Get active input text from the focused element on the current page.
+   * @returns {Promise<string>} The input text or empty string
    */
   async getActiveInputText() {
     try {
@@ -122,7 +152,8 @@ class ContextCollector {
   }
 
   /**
-   * Get recent browsing history (token optimized)
+   * Get recent browsing history (last 2 hours).
+   * @returns {Promise<TabInfo[]>}
    */
   async getRecentHistory() {
     try {
@@ -158,7 +189,8 @@ class ContextCollector {
   }
 
   /**
-   * Get top 5 most visited sites (token optimized)
+   * Get top 5 most visited sites from the last week.
+   * @returns {Promise<TabInfo[]>}
    */
   async getTopVisitedTitles() {
     try {
@@ -196,7 +228,8 @@ class ContextCollector {
   }
 
   /**
-   * Get recent AI chat tabs (token optimized)
+   * Get recent AI chat tabs (last 1 hour).
+   * @returns {Promise<TabInfo[]>}
    */
   async getRecentAITabs() {
     try {
@@ -233,7 +266,9 @@ class ContextCollector {
   }
 
   /**
-   * Detect which AI platform from URL
+   * Detect which AI platform a URL belongs to.
+   * @param {string} url - The URL to classify
+   * @returns {string} Platform name like "ChatGPT", "Claude", "Gemini"
    */
   detectAIPlatform(url) {
     const urlLower = url.toLowerCase();
@@ -247,7 +282,8 @@ class ContextCollector {
   }
 
   /**
-   * Get past similar searches (from stored data)
+   * Get past similar searches from stored data.
+   * @returns {Promise<Object[]>} Array of past search objects
    */
   async getPastSimilarSearches() {
     try {
@@ -260,7 +296,8 @@ class ContextCollector {
   }
 
   /**
-   * Detect page type
+   * Detect the type of the current active page.
+   * @returns {Promise<string>} Page type: 'ai_chat', 'coding', 'documentation', 'search', or 'general'
    */
   async detectPageType() {
     try {
@@ -297,7 +334,10 @@ class ContextCollector {
   }
 
   /**
-   * Check if input is sensitive
+   * Check if an input text or field name indicates sensitive content.
+   * @param {string} text - The input text
+   * @param {string} fieldName - The field name or attribute
+   * @returns {boolean} True if the input appears sensitive
    */
   isSensitiveInput(text, fieldName) {
     const sensitivePatterns = [

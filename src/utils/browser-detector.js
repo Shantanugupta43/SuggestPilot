@@ -3,6 +3,10 @@
  * Shared utility used by both content-script and form-detector.
  */
 
+/**
+ * Detect the user's operating system from the user agent string.
+ * @returns {string|null} OS name like "Windows 11", "macOS 14.2", "Linux", "Android 13", "iOS", or null
+ */
 export function detectOS() {
   const ua = navigator.userAgent;
   if (/Windows NT 11/.test(ua)) return 'Windows 11';
@@ -20,6 +24,10 @@ export function detectOS() {
   return null;
 }
 
+/**
+ * Detect the user's browser and major version from the user agent string.
+ * @returns {string|null} Browser name like "Chrome 120", "Firefox 121", "Microsoft Edge 120", "Safari", or null
+ */
 export function detectBrowser() {
   const ua = navigator.userAgent;
   if (/Edg\//.test(ua)) {

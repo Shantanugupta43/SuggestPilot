@@ -1,9 +1,12 @@
 /**
  * Shared Constants
  * Centralized configuration for magic numbers used across the extension.
+ * All values are named exports — import only what you need.
+ *
+ * @module constants
  */
 
-// Timing
+// ── Timing ───────────────────────────────────────────────────────────────────
 export const DEBOUNCE_MS = 500;
 export const ADDRESS_BAR_DEBOUNCE_MS = 400;
 export const SESSION_TTL_MS = 30 * 60 * 1000; // 30 minutes
