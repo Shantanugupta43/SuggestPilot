@@ -36,10 +36,6 @@ class GroqService {
         ? this.getFormFillSystemPrompt()
         : this.getContextAwareSystemPrompt();
 
-      console.log('Generating for:', context.active_input_text);
-      console.log('Session intent:', context.sessionIntent?.sessionSummary || 'none');
-      console.log('Form field:', context.fieldMeta?.fieldType || 'none');
-
       const result = await this.callWithRetry(apiKey, prompt, systemPrompt);
       return context.fieldMeta?.fieldType
         ? { ...result, isFormFill: true }
@@ -242,7 +238,7 @@ Format:
         }
       }
     } catch (parseError) {
-      console.log('Direct JSON parse failed:', parseError.message);
+      // Direct parse failed, will attempt regex fallback
     }
 
     const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
@@ -266,7 +262,7 @@ Format:
           }
         }
       } catch (e) {
-        console.log('JSON extraction failed:', e.message);
+        // Regex extraction also failed
       }
     }
 

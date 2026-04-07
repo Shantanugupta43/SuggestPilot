@@ -379,7 +379,6 @@
 
   async function initialize() {
     if (isBlockedDomain()) {
-      console.log('AI Context Assistant: disabled on', window.location.hostname);
       return;
     }
     await loadExtensionState();
@@ -387,7 +386,6 @@
     setupMessageListener();
     createSuggestionOverlay();
     setupAddressBarDetection();
-    console.log('AI Context Assistant - Session+FormFill mode active');
   }
 
   function createSuggestionOverlay() {
@@ -633,7 +631,7 @@
 
       // Stale check
       const currentValue = getInputValue(input);
-      if (currentValue !== value) { console.log('Stale result discarded'); return; }
+      if (currentValue !== value) { return; }
 
       if (response && response.success) {
         const suggestions = response.suggestions || [];

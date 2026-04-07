@@ -11,7 +11,6 @@ import sessionTracker from '../services/session-tracker.js';
 import formDetector from '../services/form-detector.js';
 
 chrome.runtime.onInstalled.addListener(async () => {
-  console.log('AI Context Assistant installed');
   await configManager.initialize();
   chrome.action.setBadgeText({ text: '' });
   chrome.action.setBadgeBackgroundColor({ color: '#4A90E2' });
@@ -175,5 +174,3 @@ async function storePastSearch(query, suggestions) {
     console.error('Storage error:', error);
   }
 }
-
-console.log('Service worker loaded - Groq Cloud Edition + Session Tracking + Form Fill');
