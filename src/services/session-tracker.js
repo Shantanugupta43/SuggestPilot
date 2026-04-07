@@ -17,7 +17,7 @@ class SessionTracker {
   constructor() {
     this.STORAGE_KEY = 'sessionIntent';
     // Session expires after 2 hours of inactivity
-    this.SESSION_TTL_MS = 2 * 60 * 60 * 1000;
+    this.SESSION_TTL_MS = 30 * 60 * 1000;
     // Keep at most this many queries in the rolling window
     this.MAX_QUERIES = 20;
     // Rebuild the summary after this many new queries
