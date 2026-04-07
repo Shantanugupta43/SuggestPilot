@@ -313,32 +313,54 @@ async function toggleExtension() {
 
 /**
  * dark mode toggle
- *  */ 
+ *  */
 
 const sign = document.getElementById('text');
 const outer = document.getElementById("outerbox");
 const inner = document.getElementById("innerbox");
-const text =document.getElementById("darkmode")
+const text = document.getElementById("darkmode");
 
-function changeText() {
-  if (sign.textContent == "X") {
+function setDarkMode(enabled) {
+  if (!sign || !outer || !inner || !text) return;
+
+  if (enabled) {
     sign.textContent = "✔";
-    outer.classList.toggle("active");
-    inner.classList.toggle("active");
+    outer.classList.add("active");
+    inner.classList.add("active");
     document.body.classList.add('dark');
-    text.classList.toggle("active");
-    
-
+    text.classList.add("active");
   } else {
     sign.textContent = "X";
-    outer.classList.toggle("active");
-    inner.classList.toggle("active");
+    outer.classList.remove("active");
+    inner.classList.remove("active");
     document.body.classList.remove('dark');
-     text.classList.toggle("active");
+    text.classList.remove("active");
   }
 }
 
-outer.addEventListener('click', changeText);
+async function loadDarkModePreference() {
+  try {
+    const stored = await chrome.storage.local.get('darkModeEnabled');
+    if (stored.darkModeEnabled) {
+      setDarkMode(true);
+    }
+  } catch (error) {
+    console.error('Failed to load dark mode preference:', error);
+  }
+}
+
+async function toggleDarkMode() {
+  const isDark = document.body.classList.contains('dark');
+  const newState = !isDark;
+  setDarkMode(newState);
+  try {
+    await chrome.storage.local.set({ darkModeEnabled: newState });
+  } catch (error) {
+    console.error('Failed to save dark mode preference:', error);
+  }
+}
+
+if (outer) outer.addEventListener('click', toggleDarkMode);
 
 
 
@@ -487,4 +509,7 @@ async function clearData() {
 } 
 
 // Initialize on load
-document.addEventListener('DOMContentLoaded', initialize);
+document.addEventListener('DOMContentLoaded', async () => {
+  await loadDarkModePreference();
+  initialize();
+});
