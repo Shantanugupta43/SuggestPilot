@@ -1,70 +1,39 @@
 /**
  * Form Field Detector
  * Identifies what kind of form field the user is typing in,
- * then assembles smart pre-fill suggestions from available context
- * (open tabs, page content, stored profile hints).
+ * then assembles smart pre-fill suggestions from available context.
  *
- * Never touches: password, credit card, CVV, SSN, PIN, bank, auth, OTP.
+ * @typedef {Object} FormFieldMeta
+ * @property {string|null} fieldType - Classified semantic type (e.g., 'job_title', 'os')
+ * @property {string} fieldLabel - Human-readable label for the field
+ * @property {Array<{value: string, source: string, confidence: number}>} candidates - Pre-fill candidates
+ * @property {boolean} isFormFill - Whether this field has fillable data
+ *
+ * @typedef {Object} FieldInput
+ * @property {string} [name] - Field name attribute
+ * @property {string} [id] - Field id attribute
+ * @property {string} [placeholder] - Field placeholder text
+ * @property {string} [autocomplete] - Field autocomplete attribute
+ * @property {string} [label] - Associated label text
+ * @property {string} [type] - Field input type
+ * @property {string} [pageUrl] - Current page URL
+ * @property {string} [pageTitle] - Current page title
  */
 
+import { detectOS, detectBrowser } from '../utils/browser-detector.js';
+import { isSpokenLanguageField, detectLanguages } from '../utils/language-detector.js';
+
+/**
+ * Classifies form fields and generates smart fill candidates from open-tab context.
+ */
 class FormDetector {
-  _isSpokenLanguageField(combined) {
-    const explicitPatterns = [
-      'preferred language',
-      'spoken language',
-      'native language',
-      'language preference',
-      'mother tongue',
-      'languages spoken',
-      'preferred_language',
-      'spoken_language',
-      'native_language',
-      'language_preference',
-      'mother_tongue',
-      'languages_spoken'
-    ];
-
-    if (explicitPatterns.some(pattern => combined.includes(pattern))) {
-      return true;
-    }
-
-    if (!/(^|[\W_])(language|languages)([\W_]|$)/.test(combined)) {
-      return false;
-    }
-
-    const technicalPatterns = [
-      'coding language',
-      'programming language',
-      'query language',
-      'language style',
-      'primary language',
-      'secondary language',
-      'source language',
-      'target language',
-      'language code',
-      'coding_language',
-      'programming_language',
-      'query_language',
-      'language_style',
-      'primary_language',
-      'secondary_language',
-      'source_language',
-      'target_language',
-      'language_code',
-      'locale'
-    ];
-
-    return !technicalPatterns.some(pattern => combined.includes(pattern));
-  }
 
   /**
    * Analyse a focused input element and return field metadata + smart fill candidates.
-   * Returns null when the field is sensitive or unrecognisable.
-   *
-   * @param {Object} fieldMeta  - {name, id, placeholder, autocomplete, label, type, pageUrl, pageTitle}
-   * @param {Object[]} openTabs - Array of {title, url} from context-collector
-   * @param {string|null} preClassifiedType - fieldType already determined by content-script (skip re-classification)
-   * @returns {Object|null}
+   * @param {FieldInput} fieldMeta - Field attributes for classification
+   * @param {Array<{title: string, url: string}>} [openTabs] - Array of open tab info
+   * @param {string|null} [preClassifiedType] - Already determined field type (skip re-classification)
+   * @returns {FormFieldMeta|null} Metadata with candidates, or null for sensitive/unrecognized fields
    */
   analyzeField(fieldMeta, openTabs = [], preClassifiedType = null) {
     const fieldType = preClassifiedType || this._classifyField(fieldMeta);
@@ -82,6 +51,9 @@ class FormDetector {
 
   /**
    * Classify the field into a semantic category.
+   * @param {FieldInput} meta - Field attributes
+   * @returns {string|null} Field type string or null if unrecognized
+   * @private
    */
   _classifyField(meta) {
     const combined = [
@@ -111,7 +83,7 @@ class FormDetector {
     if (/(github|git[_\s-]hub)/.test(combined)) return 'github_url';
     if (/(website|portfolio|personal[_\s-]?site|homepage|url|link)/.test(combined)) return 'website';
     if (/(years[_\s]?of[_\s]?exp|experience[_\s]?years|yoe)/.test(combined)) return 'experience_years';
-    if (this._isSpokenLanguageField(combined)) return 'languages';
+    if (isSpokenLanguageField(combined)) return 'languages';
     if (/(pronouns?|preferred[_\s-]?pronouns?)/.test(combined)) return 'pronouns';
     if (/(education|education[_\s-]?level|highest[_\s-]?education|degree|qualification|academic[_\s-]?level)/.test(combined)) return 'education';
     if (/(skill|expertise|technology|tech[_\s]?stack|tools)/.test(combined)) return 'skills';
@@ -136,7 +108,12 @@ class FormDetector {
   }
 
   /**
-   * Build fill candidates for a given field type, drawing from available signals.
+   * Build fill candidates for a given field type.
+   * @param {string} fieldType - The classified field type
+   * @param {FieldInput} meta - Field attributes
+   * @param {Array<{title: string, url: string}>} openTabs - Open tab info
+   * @returns {Array<{value: string, source: string, confidence: number}>}
+   * @private
    */
   _buildCandidates(fieldType, meta, openTabs) {
     const candidates = [];
@@ -165,14 +142,14 @@ class FormDetector {
 
       // ── OS: detect from browser UA ─────────────────────────────────────────
       case 'os': {
-        const os = this._detectOS();
+        const os = detectOS();
         if (os) candidates.push({ value: os, source: 'Your device', confidence: 1.0 });
         break;
       }
 
       // ── Browser: detect from UA ────────────────────────────────────────────
       case 'browser': {
-        const browser = this._detectBrowser();
+        const browser = detectBrowser();
         if (browser) candidates.push({ value: browser, source: 'Your device', confidence: 1.0 });
         break;
       }
@@ -188,7 +165,7 @@ class FormDetector {
       }
 
       case 'languages': {
-        const preferredLanguages = this._detectLanguages();
+        const preferredLanguages = detectLanguages();
         preferredLanguages.forEach(language => {
           candidates.push({ value: language, source: 'Browser language preferences', confidence: 0.95 });
         });
@@ -242,8 +219,8 @@ class FormDetector {
 
       // ── Issue description: include OS + browser automatically ──────────────
       case 'issue_description': {
-        const os = this._detectOS();
-        const browser = this._detectBrowser();
+        const os = detectOS();
+        const browser = detectBrowser();
         if (os && browser) {
           candidates.push({
             value: `Environment: ${os} / ${browser}`,
@@ -272,87 +249,95 @@ class FormDetector {
 
   // ─── Extraction helpers ────────────────────────────────────────────────────
 
+  /**
+   * Extract job title from a LinkedIn page title.
+   * Tries 6 regex patterns for locale/UI variations.
+   * @param {string} title - LinkedIn page title
+   * @returns {string|null} Job title or null if not found
+   * @private
+   */
   _extractJobTitleFromLinkedIn(title) {
     if (!title) return null;
-    // LinkedIn page titles are often: "Name | Job Title at Company | LinkedIn"
+
+    // Pattern 1: "Name | Job Title at Company | LinkedIn" (standard US)
     const match = title.match(/\|\s*([^|@]+?)\s+at\s+/i);
     if (match) return match[1].trim();
-    // Or: "Name - Job Title - LinkedIn"
+
+    // Pattern 2: "Name - Job Title - LinkedIn" (dash separator)
     const match2 = title.match(/-\s*([^-]+?)\s*-\s*LinkedIn/i);
     if (match2) return match2[1].trim();
+
+    // Pattern 3: "Job Title | Name | LinkedIn" (reversed order)
+    const match3 = title.match(/^([^|]+?)\s*\|/i);
+    if (match3 && /LinkedIn$/i.test(title)) {
+      const candidate = match3[1].trim();
+      if (candidate && !/\b(LinkedIn|Profile)\b/i.test(candidate)) return candidate;
+    }
+
+    // Pattern 4: "(Job Title) at Company" — parenthesized role
+    const match4 = title.match(/\(\s*([^)]+?)\s*\)/i);
+    if (match4 && /LinkedIn/i.test(title)) return match4[1].trim();
+
+    // Pattern 5: "Name — Job Title · LinkedIn" (em-dash + middle dot, common in EU locales)
+    const match5 = title.match(/[—–]\s*([^·]+?)\s*·/i);
+    if (match5) return match5[1].trim();
+
+    // Pattern 6: "LinkedIn: Name - Job Title"
+    const match6 = title.match(/^LinkedIn[:\s]+[^-]+-\s*(.+)$/i);
+    if (match6) return match6[1].trim().replace(/\s*\|.*$/, '').trim();
+
+    // Fallback: OG title would require fetching the page — not possible from tab metadata alone
     return null;
   }
 
+  /**
+   * Extract company name from a LinkedIn page title.
+   * Tries 5 regex patterns for locale/UI variations.
+   * @param {string} title - LinkedIn page title
+   * @returns {string|null} Company name or null if not found
+   * @private
+   */
   _extractCompanyFromLinkedIn(title) {
     if (!title) return null;
-    const match = title.match(/at\s+([^|@\-]+)/i);
+
+    // Pattern 1: "at Company" (standard)
+    const match = title.match(/at\s+([^|@\-·]+)/i);
     if (match) return match[1].trim().replace(/\s*\|.*$/, '').trim();
+
+    // Pattern 2: "Job Title @ Company" (@ separator)
+    const match2 = title.match(/@\s*([^|@\-·]+)/i);
+    if (match2) return match2[1].trim().replace(/\s*\|.*$/, '').trim();
+
+    // Pattern 3: "at Company | LinkedIn" (pipe after company)
+    const match3 = title.match(/at\s+([^|]+?)\s*\|/i);
+    if (match3) return match3[1].trim();
+
+    // Pattern 4: Company name after em-dash in EU locale: "Name — Job Title at Company · LinkedIn"
+    const match4 = title.match(/[—–]\s*[^·]*at\s+([^·]+?)\s*·/i);
+    if (match4) return match4[1].trim();
+
+    // Pattern 5: "Company Name — LinkedIn" (company page, not profile)
+    const match5 = title.match(/^([^|–—]+?)\s*[|–—].*LinkedIn/i);
+    if (match5) {
+      const candidate = match5[1].trim();
+      if (candidate && !/\b(Profile|LinkedIn)\b/i.test(candidate)) return candidate;
+    }
+
+    // Fallback: OG description would require fetching the page — not possible from tab metadata
     return null;
   }
 
+  /**
+   * Extract skills from a GitHub page title.
+   * Currently returns null as GitHub profiles don't expose skills in page titles.
+   * @param {string} title - GitHub page title
+   * @returns {null} Always null — skills are generated by AI from history instead
+   * @private
+   */
   _extractSkillsFromGitHub(title) {
     if (!title) return null;
     // GitHub profile: "username (Full Name) · GitHub" — not much to extract.
     // Return null and let the AI build skills suggestions from history instead.
-    return null;
-  }
-
-  _detectLanguages() {
-    const locales = Array.from(new Set(
-      [navigator.language, ...(navigator.languages || [])].filter(Boolean)
-    ));
-
-    const displayNames = typeof Intl.DisplayNames === 'function'
-      ? new Intl.DisplayNames(locales, { type: 'language' })
-      : null;
-
-    return locales
-      .map(locale => {
-        const code = locale.split('-')[0];
-        const displayName = displayNames?.of(code);
-        if (!displayName || /^[a-z]{2}$/i.test(displayName)) return null;
-        return displayName;
-      })
-      .filter((value, index, all) => value && all.indexOf(value) === index)
-      .slice(0, 3);
-  }
-
-  _detectOS() {
-    const ua = navigator.userAgent;
-    if (/Windows NT 11/.test(ua)) return 'Windows 11';
-    if (/Windows NT 10/.test(ua)) return 'Windows 10';
-    if (/Mac OS X/.test(ua)) {
-      const v = ua.match(/Mac OS X ([\d_]+)/);
-      return v ? `macOS ${v[1].replace(/_/g, '.')}` : 'macOS';
-    }
-    if (/Linux/.test(ua)) return 'Linux';
-    if (/Android/.test(ua)) {
-      const v = ua.match(/Android ([\d.]+)/);
-      return v ? `Android ${v[1]}` : 'Android';
-    }
-    if (/iPhone|iPad/.test(ua)) return 'iOS';
-    return null;
-  }
-
-  _detectBrowser() {
-    const ua = navigator.userAgent;
-    if (/Edg\//.test(ua)) {
-      const v = ua.match(/Edg\/([\d.]+)/);
-      return `Microsoft Edge ${v ? v[1].split('.')[0] : ''}`.trim();
-    }
-    if (/OPR\//.test(ua)) {
-      const v = ua.match(/OPR\/([\d.]+)/);
-      return `Opera ${v ? v[1].split('.')[0] : ''}`.trim();
-    }
-    if (/Chrome\//.test(ua)) {
-      const v = ua.match(/Chrome\/([\d.]+)/);
-      return `Chrome ${v ? v[1].split('.')[0] : ''}`.trim();
-    }
-    if (/Firefox\//.test(ua)) {
-      const v = ua.match(/Firefox\/([\d.]+)/);
-      return `Firefox ${v ? v[1].split('.')[0] : ''}`.trim();
-    }
-    if (/Safari\//.test(ua)) return 'Safari';
     return null;
   }
 }

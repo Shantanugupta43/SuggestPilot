@@ -378,7 +378,8 @@ body.dark .btn-secondary:hover {
 
 .form-group input[type="text"],
 .form-group input[type="password"],
-.form-group select {
+.form-group select,
+.form-group textarea {
   width: 100%;
   padding: 8px 12px;
   font-size: 14px;
@@ -387,6 +388,8 @@ body.dark .btn-secondary:hover {
   background: var(--bg-secondary);
   color: var(--text);
   transition: border-color 0.2s;
+  font-family: inherit;
+  resize: vertical;
 }
 
 .form-group input:focus,

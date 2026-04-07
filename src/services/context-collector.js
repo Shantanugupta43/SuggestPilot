@@ -1,11 +1,42 @@
 /**
  * Context Collector
- * Gathers browsing context from the current page and browser state
+ * Gathers browsing context from the current page and browser state.
+ *
+ * @typedef {Object} TabInfo
+ * @property {string} title - Tab title
+ * @property {string} url - Tab URL
+ * @property {number} [visitCount] - Number of visits
+ * @property {number} [lastVisitTime] - Last visit timestamp
+ * @property {string} [platform] - AI platform name (for AI tabs)
+ *
+ * @typedef {Object} PageContext
+ * @property {string} title - Page title
+ * @property {string} url - Page URL
+ * @property {string[]} headings - Page headings
+ *
+ * @typedef {Object} FullContext
+ * @property {PageContext} current_page - Current active page info
+ * @property {TabInfo[]} active_tabs - Other open tabs
+ * @property {string} active_input_text - Current input value
+ * @property {TabInfo[]} recent_history - Recent browsing history
+ * @property {TabInfo[]} top_visited_titles - Most visited sites
+ * @property {TabInfo[]} recent_ai_tabs - Recent AI chat tabs
+ * @property {Object} past_similar_searches - Past search history
+ * @property {string} page_type - Detected page type
  */
 
+import {
+  MAX_ACTIVE_TABS, MAX_HISTORY_RESULTS, MAX_TOP_VISITED,
+  MAX_AI_TABS, MAX_HEADING_COUNT
+} from '../utils/constants.js';
+
+/**
+ * Collects browsing context for suggestion generation.
+ */
 class ContextCollector {
   /**
-   * Collect full context for suggestion generation
+   * Collect full context for suggestion generation.
+   * @returns {Promise<FullContext>}
    */
   async collectContext() {
     const context = {
@@ -23,14 +54,28 @@ class ContextCollector {
   }
 
   /**
-   * Get current page context (token optimized)
+   * Get current page context (title, URL, headings).
+   * Handles Chrome internal pages gracefully.
+   * @returns {Promise<PageContext>}
    */
   async getCurrentPageContext() {
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      
-      const pageInfo = await chrome.tabs.sendMessage(tab.id, { 
-        action: 'getPageContext' 
+
+      // Chrome internal pages cannot receive content script messages
+      const internalPrefixes = ['chrome://', 'chrome-extension://', 'edge://', 'about:'];
+      const isInternalPage = tab.url && internalPrefixes.some(prefix => tab.url.startsWith(prefix));
+
+      if (isInternalPage) {
+        return {
+          title: tab.title || 'Chrome Internal Page',
+          url: tab.url || '',
+          headings: []
+        };
+      }
+
+      const pageInfo = await chrome.tabs.sendMessage(tab.id, {
+        action: 'getPageContext'
       }).catch(() => ({
         title: tab.title || '',
         headings: []
@@ -39,7 +84,7 @@ class ContextCollector {
       return {
         title: pageInfo.title || tab.title || '',
         url: tab.url || '',
-        headings: (pageInfo.headings || []).slice(0, 3) // Only top 3 headings
+        headings: (pageInfo.headings || []).slice(0, MAX_HEADING_COUNT)
         // Removed summary and mainContent to save tokens
       };
     } catch (error) {
@@ -49,17 +94,15 @@ class ContextCollector {
   }
 
   /**
-   * Get top 5 active tabs (token optimized)
-   * EXCLUDES the current active tab - only returns OTHER tabs user has open
+   * Get up to MAX_ACTIVE_TABS other open tabs (excluding current).
+   * Filters out sensitive domains.
+   * @returns {Promise<TabInfo[]>}
    */
   async getActiveTabsContext() {
     try {
       const tabs = await chrome.tabs.query({ currentWindow: true });
       const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      
-      console.log('🔍 Total tabs in window:', tabs.length);
-      console.log('📍 Current active tab:', currentTab?.title);
-      
+
       const sensitiveDomains = [
         'bank', 'login', 'signin', 'auth', 'payment',
         'checkout', 'account', 'admin', 'dashboard'
@@ -69,27 +112,18 @@ class ContextCollector {
         .filter(tab => {
           // EXCLUDE the current active tab
           if (tab.id === currentTab?.id) {
-            console.log('⏭️ Skipping current active tab:', tab.title);
             return false;
           }
-          
+
           const url = tab.url?.toLowerCase() || '';
           const isFiltered = sensitiveDomains.some(domain => url.includes(domain));
-          if (isFiltered) {
-            console.log('🚫 Filtered sensitive tab:', tab.title);
-          }
           return !isFiltered;
         })
-        .slice(0, 5) // Get top 5 OTHER tabs
+        .slice(0, MAX_ACTIVE_TABS) // Get top 5 OTHER tabs
         .map(tab => ({
           title: tab.title || '',
           url: tab.url || ''
         }));
-
-      console.log('Other tabs collected (excluding current):', activeTabs.length);
-      activeTabs.forEach((tab, i) => {
-        console.log(`  ${i + 1}. "${tab.title}"`);
-      });
 
       return activeTabs;
     } catch (error) {
@@ -99,7 +133,8 @@ class ContextCollector {
   }
 
   /**
-   * Get active input text from focused element
+   * Get active input text from the focused element on the current page.
+   * @returns {Promise<string>} The input text or empty string
    */
   async getActiveInputText() {
     try {
@@ -117,7 +152,8 @@ class ContextCollector {
   }
 
   /**
-   * Get recent browsing history (token optimized)
+   * Get recent browsing history (last 2 hours).
+   * @returns {Promise<TabInfo[]>}
    */
   async getRecentHistory() {
     try {
@@ -125,7 +161,7 @@ class ContextCollector {
       const history = await chrome.history.search({
         text: '',
         startTime: twoHoursAgo,
-        maxResults: 15 // Reduced for token efficiency
+        maxResults: MAX_HISTORY_RESULTS // Reduced for token efficiency
       });
 
       const filtered = history
@@ -153,7 +189,8 @@ class ContextCollector {
   }
 
   /**
-   * Get top 5 most visited sites (token optimized)
+   * Get top 5 most visited sites from the last week.
+   * @returns {Promise<TabInfo[]>}
    */
   async getTopVisitedTitles() {
     try {
@@ -161,7 +198,7 @@ class ContextCollector {
       const history = await chrome.history.search({
         text: '',
         startTime: oneWeekAgo,
-        maxResults: 50 // Reduced sample size
+        maxResults: 50 // Top-visited sample size
       });
 
       const topTitles = history
@@ -176,7 +213,7 @@ class ContextCollector {
                  item.visitCount > 1;
         })
         .sort((a, b) => b.visitCount - a.visitCount)
-        .slice(0, 5) // Reduced to top 5
+        .slice(0, MAX_TOP_VISITED) // Reduced to top 5
         .map(item => ({
           title: item.title || '',
           url: item.url || '',
@@ -191,7 +228,8 @@ class ContextCollector {
   }
 
   /**
-   * Get recent AI chat tabs (token optimized)
+   * Get recent AI chat tabs (last 1 hour).
+   * @returns {Promise<TabInfo[]>}
    */
   async getRecentAITabs() {
     try {
@@ -205,7 +243,7 @@ class ContextCollector {
       const history = await chrome.history.search({
         text: '',
         startTime: oneHourAgo,
-        maxResults: 20 // Reduced sample
+        maxResults: 20 // AI-tab sample
       });
 
       const aiTabs = history
@@ -213,7 +251,7 @@ class ContextCollector {
           const url = item.url?.toLowerCase() || '';
           return aiDomains.some(domain => url.includes(domain));
         })
-        .slice(0, 3) // Reduced to 3 for token efficiency
+        .slice(0, MAX_AI_TABS) // Reduced to 3 for token efficiency
         .map(item => ({
           title: item.title || '',
           url: item.url || '',
@@ -228,7 +266,9 @@ class ContextCollector {
   }
 
   /**
-   * Detect which AI platform from URL
+   * Detect which AI platform a URL belongs to.
+   * @param {string} url - The URL to classify
+   * @returns {string} Platform name like "ChatGPT", "Claude", "Gemini"
    */
   detectAIPlatform(url) {
     const urlLower = url.toLowerCase();
@@ -242,7 +282,8 @@ class ContextCollector {
   }
 
   /**
-   * Get past similar searches (from stored data)
+   * Get past similar searches from stored data.
+   * @returns {Promise<Object[]>} Array of past search objects
    */
   async getPastSimilarSearches() {
     try {
@@ -255,7 +296,8 @@ class ContextCollector {
   }
 
   /**
-   * Detect page type
+   * Detect the type of the current active page.
+   * @returns {Promise<string>} Page type: 'ai_chat', 'coding', 'documentation', 'search', or 'general'
    */
   async detectPageType() {
     try {
@@ -292,7 +334,10 @@ class ContextCollector {
   }
 
   /**
-   * Check if input is sensitive
+   * Check if an input text or field name indicates sensitive content.
+   * @param {string} text - The input text
+   * @param {string} fieldName - The field name or attribute
+   * @returns {boolean} True if the input appears sensitive
    */
   isSensitiveInput(text, fieldName) {
     const sensitivePatterns = [

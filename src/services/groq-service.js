@@ -1,17 +1,72 @@
 /**
- * Enhanced Groq API Service
- * + Session Intent Tracking in prompt
- * + Smart Form-Fill mode
+ * Groq API Service
+ * Handles API calls, prompt building, response parsing, and suggestion validation.
+ *
+ * @typedef {Object} Suggestion
+ * @property {string} text - The suggestion text
+ * @property {string} derivation - Explanation of where the suggestion came from
+ *
+ * @typedef {Object} SuggestionResponse
+ * @property {string} reason - Why these suggestions were generated
+ * @property {Suggestion[]} suggestions - Array of suggestions
+ * @property {boolean} [isFormFill] - Whether this is a form-fill response
+ * @property {string} [error] - Error message if any
+ *
+ * @typedef {Object} FieldMeta
+ * @property {string} fieldType - Classified field type
+ * @property {string} fieldLabel - Human-readable label
+ * @property {Array<{value: string, source: string, confidence: number}>} candidates - Pre-fill candidates
+ * @property {boolean} isFormFill - Whether this is a form field
+ * @property {string} [pageTitle] - Current page title
+ * @property {string} [pageUrl] - Current page URL
+ *
+ * @typedef {Object} GenerationContext
+ * @property {string} active_input_text - Current input value
+ * @property {string} [page_type] - Detected page type
+ * @property {Object} [current_page] - Current page info
+ * @property {Array} [active_tabs] - Open tabs context
+ * @property {Array} [recent_history] - Browsing history context
+ * @property {Object} [sessionIntent] - Session intent context
+ * @property {FieldMeta} [fieldMeta] - Form field metadata
  */
 
 import configManager from '../config/config-manager.js';
+import {
+  GROQ_BASE_URL, GROQ_MODEL, MAX_TOKENS, TEMPERATURE, TOP_P,
+  TEST_MAX_TOKENS, TEST_TEMPERATURE, MAX_SUGGESTIONS,
+  MAX_THREAD_TEXT_LENGTH,
+  MIN_SUGGESTION_LENGTH, MAX_SUGGESTION_LENGTH,
+  PROMPT_TAB_COUNT, PROMPT_HISTORY_COUNT, PROMPT_TITLE_SLICE, PROMPT_PAGE_TITLE_SLICE
+} from '../utils/constants.js';
 
+/**
+ * Groq API service for generating context-aware suggestions.
+ */
 class GroqService {
   constructor() {
-    this.baseURL = 'https://api.groq.com/openai/v1';
-    this.model = 'llama-3.1-8b-instant';
+    /** @type {string} */
+    this.baseURL = GROQ_BASE_URL;
   }
 
+  /**
+   * Resolve the model from configManager, falling back to the default.
+   * @returns {string} The model identifier
+   * @private
+   */
+  _resolveModel() {
+    try {
+      return configManager.get('model') || GROQ_MODEL;
+    } catch {
+      return GROQ_MODEL;
+    }
+  }
+
+  /**
+   * Generate suggestions based on the given context.
+   * Handles both form-fill mode (local candidates) and AI mode (Groq API).
+   * @param {GenerationContext} context - The generation context
+   * @returns {Promise<SuggestionResponse>}
+   */
   async generateSuggestions(context) {
     try {
       const apiKey = configManager.getApiKey();
@@ -36,10 +91,6 @@ class GroqService {
         ? this.getFormFillSystemPrompt()
         : this.getContextAwareSystemPrompt();
 
-      console.log('Generating for:', context.active_input_text);
-      console.log('Session intent:', context.sessionIntent?.sessionSummary || 'none');
-      console.log('Form field:', context.fieldMeta?.fieldType || 'none');
-
       const result = await this.callWithRetry(apiKey, prompt, systemPrompt);
       return context.fieldMeta?.fieldType
         ? { ...result, isFormFill: true }
@@ -51,7 +102,10 @@ class GroqService {
   }
 
   /**
-   * Build a form-fill response directly from local candidates (no API call needed)
+   * Build a form-fill response directly from local candidates (no API call needed).
+   * @param {FieldMeta} fieldMeta - Form field metadata with candidates
+   * @returns {SuggestionResponse}
+   * @private
    */
   _buildFormFillResponse(fieldMeta) {
     const suggestions = fieldMeta.candidates.map(c => ({
@@ -66,6 +120,15 @@ class GroqService {
     };
   }
 
+  /**
+   * Call the Groq API with automatic retry on 429.
+   * @param {string} apiKey - Groq API key
+   * @param {string} prompt - User prompt text
+   * @param {string} systemPrompt - System prompt text
+   * @param {number} [attempt] - Current retry attempt
+   * @returns {Promise<SuggestionResponse>}
+   * @private
+   */
   async callWithRetry(apiKey, prompt, systemPrompt, attempt = 0) {
     const response = await fetch(`${this.baseURL}/chat/completions`, {
       method: 'POST',
@@ -74,14 +137,14 @@ class GroqService {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: this.model,
+        model: this._resolveModel(),
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: prompt }
         ],
-        temperature: 0.4,
-        max_tokens: 200,
-        top_p: 0.9
+        temperature: TEMPERATURE,
+        max_tokens: MAX_TOKENS,
+        top_p: TOP_P
       })
     });
 
@@ -107,7 +170,9 @@ class GroqService {
   // ─── Prompt builders ───────────────────────────────────────────────────────
 
   /**
-   * Standard context-aware prompt — now includes session intent thread.
+   * Build a standard context-aware prompt with session intent, tabs, and history.
+   * @param {GenerationContext} context - The generation context
+   * @returns {string} Token-efficient prompt string
    */
   buildContextAwarePrompt(context) {
     const input = context.active_input_text || '';
@@ -119,24 +184,24 @@ class GroqService {
     }
     if (context.sessionIntent?.recentThread) {
       // Truncate to keep tokens tight
-      const thread = context.sessionIntent.recentThread.slice(0, 120);
+      const thread = context.sessionIntent.recentThread.slice(0, MAX_THREAD_TEXT_LENGTH);
       parts.push(`THREAD:${thread}`);
     }
 
-    // Other tabs — 2 max
+    // Other tabs — PROMPT_TAB_COUNT max
     if (context.active_tabs?.length > 0) {
       const tabs = context.active_tabs
-        .slice(0, 2)
-        .map(t => `"${t.title.slice(0, 40)}"`)
+        .slice(0, PROMPT_TAB_COUNT)
+        .map(t => `"${t.title.slice(0, PROMPT_TITLE_SLICE)}"`)
         .join(', ');
       parts.push(`TABS:${tabs}`);
     }
 
-    // Recent history — 2 max
+    // Recent history — PROMPT_HISTORY_COUNT max
     if (context.recent_history?.length > 0) {
       const hist = context.recent_history
-        .slice(0, 2)
-        .map(t => `"${t.title.slice(0, 40)}"`)
+        .slice(0, PROMPT_HISTORY_COUNT)
+        .map(t => `"${t.title.slice(0, PROMPT_TITLE_SLICE)}"`)
         .join(', ');
       parts.push(`HIST:${hist}`);
     }
@@ -145,7 +210,9 @@ class GroqService {
   }
 
   /**
-   * Form-field prompt — asks AI for field-specific suggestions.
+   * Build a form-field specific prompt with field type, label, and known values.
+   * @param {GenerationContext} context - The generation context
+   * @returns {string} Token-efficient prompt string
    */
   buildFormFieldPrompt(context) {
     const fieldType = context.fieldMeta?.fieldType || 'unknown';
@@ -167,7 +234,7 @@ class GroqService {
 
     // Include page context for issue_subject
     if (context.fieldMeta?.pageTitle) {
-      parts.push(`PAGE_TITLE:"${context.fieldMeta.pageTitle.slice(0, 80)}"`);
+      parts.push(`PAGE_TITLE:"${context.fieldMeta.pageTitle.slice(0, PROMPT_PAGE_TITLE_SLICE)}"`);
     }
 
     if (context.sessionIntent?.sessionSummary) {
@@ -175,8 +242,8 @@ class GroqService {
     }
     if (context.active_tabs?.length > 0) {
       const tabs = context.active_tabs
-        .slice(0, 2)
-        .map(t => `"${t.title.slice(0, 40)}"`)
+        .slice(0, PROMPT_TAB_COUNT)
+        .map(t => `"${t.title.slice(0, PROMPT_TITLE_SLICE)}"`)
         .join(', ');
       parts.push(`TABS:${tabs}`);
     }
@@ -186,6 +253,10 @@ class GroqService {
 
   // ─── System prompts ────────────────────────────────────────────────────────
 
+  /**
+   * Get the system prompt for context-aware search suggestions.
+   * @returns {string} System prompt text
+   */
   getContextAwareSystemPrompt() {
     return `Autocomplete assistant. Complete the user's query into a full natural question or search phrase using context from their session research thread (SESSION, THREAD), open tabs (TABS) and history (HIST).
 
@@ -201,6 +272,10 @@ Format:
 {"reason":"brief","suggestions":[{"text":"full natural question or search phrase","derivation":"source"},{"text":"full natural question or search phrase","derivation":"source"},{"text":"full natural question or search phrase","derivation":"source"}]}`;
   }
 
+  /**
+   * Get the system prompt for form-fill suggestions.
+   * @returns {string} System prompt text
+   */
   getFormFillSystemPrompt() {
     return `Form-fill assistant. The user is filling in a form field. Suggest 2-3 appropriate values for the given field type using context from their open tabs and session.
 
@@ -215,16 +290,18 @@ Format:
 {"reason":"Smart form fill","suggestions":[{"text":"suggested value","derivation":"source of this suggestion"},{"text":"alternative value","derivation":"source"}]}`;
   }
 
-  // ─── Response parsing (unchanged from original) ────────────────────────────
+  // ─── Response parsing ──────────────────────────────────────────────────────
 
-  parseResponse(content) {
-    let cleaned = content.trim();
-    cleaned = cleaned.replace(/^```json\s*/i, '').replace(/^```\s*/, '');
-    cleaned = cleaned.replace(/```\s*$/, '');
-    cleaned = cleaned.trim();
-
+  /**
+   * Parse a JSON string and return structured suggestion data.
+   * Returns null if the string is not valid JSON or lacks suggestions.
+   * @param {string} jsonString - JSON string to parse
+   * @returns {SuggestionResponse|null}
+   * @private
+   */
+  _parseAndValidate(jsonString) {
     try {
-      const parsed = JSON.parse(cleaned);
+      const parsed = JSON.parse(jsonString);
       if (parsed && typeof parsed === 'object') {
         if (Array.isArray(parsed.suggestions) && parsed.suggestions.length > 0) {
           const suggestions = this.validateSuggestions(parsed.suggestions);
@@ -241,33 +318,32 @@ Format:
           }
         }
       }
-    } catch (parseError) {
-      console.log('Direct JSON parse failed:', parseError.message);
+    } catch {
+      // Invalid JSON or unexpected structure
     }
+    return null;
+  }
 
+  /**
+   * Parse a JSON string and return structured suggestion data.
+   * @param {string} content - Raw response content (may include markdown)
+   * @returns {SuggestionResponse} Parsed suggestions or empty fallback
+   */
+  parseResponse(content) {
+    let cleaned = content.trim();
+    cleaned = cleaned.replace(/^```json\s*/i, '').replace(/^```\s*/, '');
+    cleaned = cleaned.replace(/```\s*$/, '');
+    cleaned = cleaned.trim();
+
+    // Try direct parse first
+    const directResult = this._parseAndValidate(cleaned);
+    if (directResult) return directResult;
+
+    // Fallback: extract JSON block via regex
     const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
-      try {
-        const parsed = JSON.parse(jsonMatch[0]);
-        if (parsed && typeof parsed === 'object') {
-          if (Array.isArray(parsed.suggestions) && parsed.suggestions.length > 0) {
-            const suggestions = this.validateSuggestions(parsed.suggestions);
-            const normalized = suggestions.map(s => ({
-              text: s.text || s,
-              derivation: s.derivation || 'Based on context'
-            }));
-            const validated = this.validateSuggestionOrdering(normalized);
-            if (validated.length > 0) {
-              return {
-                reason: parsed.reason || 'Based on your browsing context',
-                suggestions: validated
-              };
-            }
-          }
-        }
-      } catch (e) {
-        console.log('JSON extraction failed:', e.message);
-      }
+      const regexResult = this._parseAndValidate(jsonMatch[0]);
+      if (regexResult) return regexResult;
     }
 
     console.error('AI did not return proper JSON format');
@@ -277,6 +353,12 @@ Format:
     };
   }
 
+  /**
+   * Validate and normalize an array of raw suggestions.
+   * Filters by length, removes invalid text, caps to MAX_SUGGESTIONS.
+   * @param {Array<string|Object>} suggestions - Raw suggestion items
+   * @returns {Suggestion[]} Normalized suggestions array
+   */
   validateSuggestions(suggestions) {
     if (!Array.isArray(suggestions)) return [];
     return suggestions
@@ -292,15 +374,20 @@ Format:
       .filter(s => {
         if (!s || !s.text) return false;
         const text = s.text;
-        if (text.length < 3 || text.length > 200) return false;
+        if (text.length < MIN_SUGGESTION_LENGTH || text.length > MAX_SUGGESTION_LENGTH) return false;
         if (/^[{}\[\]"'`]+$/.test(text)) return false;
         if (text.toLowerCase().includes('reason:')) return false;
         if (text.toLowerCase().includes('suggestions:')) return false;
         return true;
       })
-      .slice(0, 3);
+      .slice(0, MAX_SUGGESTIONS);
   }
 
+  /**
+   * Prefix derivation labels with Session/Context/Smart based on position.
+   * @param {Suggestion[]} suggestions - Array of suggestion objects
+   * @returns {Suggestion[]} Suggestions with enhanced derivation labels
+   */
   validateSuggestionOrdering(suggestions) {
     if (!Array.isArray(suggestions) || suggestions.length === 0) return suggestions;
     return suggestions.map((suggestion, index) => {
@@ -313,6 +400,10 @@ Format:
     });
   }
 
+  /**
+   * Test the Groq API connection with a minimal request.
+   * @returns {Promise<{success: boolean, error?: string}>}
+   */
   async testConnection() {
     try {
       const apiKey = configManager.getApiKey();
@@ -323,22 +414,45 @@ Format:
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          model: this.model,
+          model: this._resolveModel(),
           messages: [
             { role: 'system', content: 'Respond with only: {"status": "ok"}' },
             { role: 'user', content: 'test' }
           ],
-          max_tokens: 20,
-          temperature: 0
+          max_tokens: TEST_MAX_TOKENS,
+          temperature: TEST_TEMPERATURE
         })
       });
-      return response.ok;
+
+      if (!response.ok) {
+        let errorMessage = `API Error: ${response.status}`;
+        try {
+          const errorBody = await response.json();
+          if (response.status === 401) {
+            errorMessage = 'Invalid API key';
+          } else if (response.status === 429) {
+            errorMessage = 'Rate limited — try again later';
+          } else if (errorBody.error?.message) {
+            errorMessage = errorBody.error.message;
+          }
+        } catch {
+          // If we can't parse the error body, fall back to status-based message
+          if (response.status === 401) errorMessage = 'Invalid API key';
+          else if (response.status === 429) errorMessage = 'Rate limited — try again later';
+        }
+        return { success: false, error: errorMessage };
+      }
+
+      return { success: true };
     } catch (error) {
-      console.error('API connection test failed:', error);
-      return false;
+      return { success: false, error: `Connection failed: ${error.message}` };
     }
   }
 
+  /**
+   * Get the list of available Groq models.
+   * @returns {string[]} Array of model identifiers
+   */
   getAvailableModels() {
     return ['llama-3.1-8b-instant'];
   }

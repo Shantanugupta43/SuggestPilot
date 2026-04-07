@@ -4,25 +4,39 @@
  * + Session-aware suggestion labels
  */
 
-(function() {
-  'use strict';
+import { detectOS, detectBrowser } from '../utils/browser-detector.js';
+import { isSpokenLanguageField } from '../utils/language-detector.js';
+import { DEBOUNCE_MS, ADDRESS_BAR_DEBOUNCE_MS, MAX_CANDIDATE_SLICE, MAX_FIELD_HEADING_SLICE, LOADING_TIMEOUT, DEFAULT_BLOCKED_DOMAINS } from '../utils/constants.js';
 
-  let currentInput = null;
-  let suggestionOverlay = null;
-  let currentSuggestions = [];
-  let activeSuggestionIndex = 0;
-  let debounceTimer = null;
-  let lastInputValue = '';
-  let isAddressBar = false;
-  let extensionEnabled = true;
+let currentInput = null;
+let suggestionOverlay = null;
+let currentSuggestions = [];
+let activeSuggestionIndex = 0;
+let debounceTimer = null;
+let loadingTimer = null;
+let lastInputValue = '';
+let isAddressBar = false;
+let extensionEnabled = true;
+let blockedDomains = DEFAULT_BLOCKED_DOMAINS;
 
-  // Sites where the extension should stay completely silent
-  const BLOCKED_DOMAINS = [
-    'linkedin.com'
-  ];
+async function loadBlockedDomains() {
+  try {
+    const response = await chrome.runtime.sendMessage({ action: 'getBlockedDomains' });
+    if (response && response.success) {
+      blockedDomains = response.domains;
+    }
+  } catch {
+    // Fall back to defaults
+  }
+}
 
-  // ── Form-fill detector (inline, no import needed in content scripts) ────────
-  const FORM_FIELD_PATTERNS = {
+function isBlockedDomain() {
+  const host = window.location.hostname.toLowerCase();
+  return blockedDomains.some(domain => host.includes(domain));
+}
+
+// ── Form-fill detector ────────
+const FORM_FIELD_PATTERNS = {
     // Sensitive must be checked 
     sensitive: ['password', 'passwd', 'pwd', 'credit', 'card', 'cvv', 'cvc', 'ssn', 'bank', 'pin', 'otp', 'auth', 'token', 'secret', 'email', 'e_mail', 'mail'],
     job_title: ['job_title', 'jobtitle', 'position', 'role', 'designation', 'occupation', 'job_role'],
@@ -76,66 +90,11 @@
     return null;
   }
 
-  function detectOS() {
-    const ua = navigator.userAgent;
-    if (/Windows NT 11/.test(ua)) return 'Windows 11';
-    if (/Windows NT 10/.test(ua)) return 'Windows 10';
-    if (/Mac OS X/.test(ua)) { const v = ua.match(/Mac OS X ([\d_]+)/); return v ? `macOS ${v[1].replace(/_/g,'.')}` : 'macOS'; }
-    if (/Linux/.test(ua)) return 'Linux';
-    if (/Android/.test(ua)) { const v = ua.match(/Android ([\d.]+)/); return v ? `Android ${v[1]}` : 'Android'; }
-    if (/iPhone|iPad/.test(ua)) return 'iOS';
-    return null;
-  }
-
-  function detectBrowser() {
-    const ua = navigator.userAgent;
-    if (/Edg\//.test(ua)) { const v = ua.match(/Edg\/([\d.]+)/); return `Edge ${v ? v[1].split('.')[0] : ''}`.trim(); }
-    if (/OPR\//.test(ua)) { const v = ua.match(/OPR\/([\d.]+)/); return `Opera ${v ? v[1].split('.')[0] : ''}`.trim(); }
-    if (/Chrome\//.test(ua)) { const v = ua.match(/Chrome\/([\d.]+)/); return `Chrome ${v ? v[1].split('.')[0] : ''}`.trim(); }
-    if (/Firefox\//.test(ua)) { const v = ua.match(/Firefox\/([\d.]+)/); return `Firefox ${v ? v[1].split('.')[0] : ''}`.trim(); }
-    if (/Safari\//.test(ua)) return 'Safari';
-    return null;
-  }
-
   function normalizeCandidateValue(value) {
     return (value || '')
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, ' ')
       .trim();
-  }
-
-  function isSpokenLanguageField(combined) {
-    const explicitPatterns = [
-      'spoken_language',
-      'preferred_language',
-      'language_preference',
-      'native_language',
-      'mother_tongue',
-      'languages_spoken'
-    ];
-
-    if (explicitPatterns.some(pattern => combined.includes(pattern))) {
-      return true;
-    }
-
-    if (!/(?:^|_)(language|languages)(?:_|$)/.test(combined)) {
-      return false;
-    }
-
-    const technicalPatterns = [
-      'coding_language',
-      'programming_language',
-      'query_language',
-      'language_style',
-      'primary_language',
-      'secondary_language',
-      'source_language',
-      'target_language',
-      'language_code',
-      'locale'
-    ];
-
-    return !technicalPatterns.some(pattern => combined.includes(pattern));
   }
 
   function matchesLanguageOption(optionNormalized, variation) {
@@ -239,7 +198,7 @@
       }
     });
 
-    return candidates.slice(0, 3);
+    return candidates.slice(0, MAX_CANDIDATE_SLICE);
   }
 
   /**
@@ -313,7 +272,7 @@
 
     if ((fieldType === 'pronouns' || fieldType === 'education') && element.tagName?.toLowerCase() === 'select') {
       const optionCandidates = createCandidateList(
-        collectFieldOptions(element).slice(0, 3),
+        collectFieldOptions(element).slice(0, MAX_CANDIDATE_SLICE),
         'Available form options',
         0.65
       );
@@ -362,11 +321,6 @@
 
   // ── Overlay setup ──────────────────────────────────────────────────────────
 
-  function isBlockedDomain() {
-    const host = window.location.hostname.toLowerCase();
-    return BLOCKED_DOMAINS.some(domain => host.includes(domain));
-  }
-
   async function loadExtensionState() {
     try {
       const stored = await chrome.storage.local.get('extensionEnabled');
@@ -379,15 +333,14 @@
 
   async function initialize() {
     if (isBlockedDomain()) {
-      console.log('AI Context Assistant: disabled on', window.location.hostname);
       return;
     }
+    await loadBlockedDomains();
     await loadExtensionState();
     setupInputTracking();
     setupMessageListener();
     createSuggestionOverlay();
     setupAddressBarDetection();
-    console.log('AI Context Assistant - Session+FormFill mode active');
   }
 
   function createSuggestionOverlay() {
@@ -593,7 +546,7 @@
       return;
     }
     showSuggestionLoading(input);
-    const delay = isAddressBar ? 400 : 500;
+    const delay = isAddressBar ? ADDRESS_BAR_DEBOUNCE_MS : DEBOUNCE_MS;
     debounceTimer = setTimeout(() => generateSuggestions(input, value), delay);
   }
 
@@ -615,7 +568,7 @@
           title: document.title,
           url: window.location.href,
           headings: Array.from(document.querySelectorAll('h1, h2, h3'))
-            .slice(0, 5).map(h => h.textContent.trim()).filter(Boolean)
+            .slice(0, MAX_FIELD_HEADING_SLICE).map(h => h.textContent.trim()).filter(Boolean)
         },
         is_address_bar: isAddressBar,
         is_ai_chat: window.location.href.includes('claude.ai') || window.location.href.includes('chat.openai.com')
@@ -633,7 +586,7 @@
 
       // Stale check
       const currentValue = getInputValue(input);
-      if (currentValue !== value) { console.log('Stale result discarded'); return; }
+      if (currentValue !== value) { return; }
 
       if (response && response.success) {
         const suggestions = response.suggestions || [];
@@ -701,6 +654,8 @@
     suggestionOverlay.style.top = `${top}px`;
     suggestionOverlay.style.width = `${Math.max(rect.width, 320)}px`;
 
+    clearTimeout(loadingTimer);
+
     // Counter pill
     const counter = currentSuggestions.length > 1
       ? `<span style="display:inline-flex;align-items:center;gap:3px;background:rgba(255,255,255,0.12);border-radius:20px;padding:1px 7px;font-size:10px;font-weight:500;letter-spacing:0.02em;">↑↓ ${activeSuggestionIndex + 1}/${currentSuggestions.length}</span>`
@@ -760,6 +715,19 @@
         Thinking…
       </div>
     `;
+
+    // Auto-dismiss after timeout if no response
+    clearTimeout(loadingTimer);
+    loadingTimer = setTimeout(() => {
+      if (suggestionOverlay && suggestionOverlay.style.display === 'block' && suggestionOverlay.textContent.includes('Thinking')) {
+        suggestionOverlay.innerHTML = `
+          <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:rgba(255,255,255,0.55);font-weight:400;">
+            Timed out — please try again
+          </div>
+        `;
+        setTimeout(() => { hideSuggestion(); }, 3000);
+      }
+    }, LOADING_TIMEOUT);
   }
 
   function updateSuggestionDisplay() {
@@ -768,6 +736,7 @@
   }
 
   function hideSuggestion() {
+    clearTimeout(loadingTimer);
     if (suggestionOverlay) suggestionOverlay.style.display = 'none';
   }
 
@@ -791,7 +760,7 @@
     const tagName = element.tagName?.toLowerCase();
     const type = element.type?.toLowerCase();
     if (tagName === 'textarea') return true;
-    if (tagName === 'input' && (type === 'text' || type === 'search' || type === 'url' || !type)) return true;
+    if (tagName === 'input' && (type === 'text' || type === 'search' || type === 'url' || type === 'number' || !type)) return true;
     if (element.contentEditable === 'true') return true;
     if (element.getAttribute('role') === 'textbox') return true;
     return false;
@@ -800,7 +769,15 @@
   function isSensitiveField(element) {
     if (!element) return false;
     const type = element.type?.toLowerCase();
-    if (type === 'password' || type === 'tel' || type === 'number' || type === 'email') return true;
+    if (type === 'password' || type === 'tel' || type === 'email') return true;
+
+    // Number fields: only block if heuristics suggest sensitive use (PIN, CVV, etc.)
+    if (type === 'number') {
+      const combinedText = `${element.name} ${element.id} ${element.autocomplete} ${element.placeholder}`.toLowerCase();
+      const sensitiveNumberPatterns = ['pin', 'cvv', 'cvc', 'otp', 'verification', 'security_code', 'securitycode', 'card_code'];
+      return sensitiveNumberPatterns.some(k => combinedText.includes(k));
+    }
+
     const combinedText = `${element.name} ${element.id} ${element.autocomplete} ${element.placeholder}`.toLowerCase();
     return ['password', 'passwd', 'credit', 'card', 'cvv', 'ssn', 'bank', 'pin', 'token', 'auth', 'login', 'otp', 'verification'].some(k => combinedText.includes(k));
   }
@@ -869,4 +846,3 @@
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => initialize());
   else initialize();
-})();
