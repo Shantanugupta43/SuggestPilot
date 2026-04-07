@@ -229,19 +229,65 @@ class FormDetector {
 
   _extractJobTitleFromLinkedIn(title) {
     if (!title) return null;
-    // LinkedIn page titles are often: "Name | Job Title at Company | LinkedIn"
+
+    // Pattern 1: "Name | Job Title at Company | LinkedIn" (standard US)
     const match = title.match(/\|\s*([^|@]+?)\s+at\s+/i);
     if (match) return match[1].trim();
-    // Or: "Name - Job Title - LinkedIn"
+
+    // Pattern 2: "Name - Job Title - LinkedIn" (dash separator)
     const match2 = title.match(/-\s*([^-]+?)\s*-\s*LinkedIn/i);
     if (match2) return match2[1].trim();
+
+    // Pattern 3: "Job Title | Name | LinkedIn" (reversed order)
+    const match3 = title.match(/^([^|]+?)\s*\|/i);
+    if (match3 && /LinkedIn$/i.test(title)) {
+      const candidate = match3[1].trim();
+      if (candidate && !/\b(LinkedIn|Profile)\b/i.test(candidate)) return candidate;
+    }
+
+    // Pattern 4: "(Job Title) at Company" — parenthesized role
+    const match4 = title.match(/\(\s*([^)]+?)\s*\)/i);
+    if (match4 && /LinkedIn/i.test(title)) return match4[1].trim();
+
+    // Pattern 5: "Name — Job Title · LinkedIn" (em-dash + middle dot, common in EU locales)
+    const match5 = title.match(/[—–]\s*([^·]+?)\s*·/i);
+    if (match5) return match5[1].trim();
+
+    // Pattern 6: "LinkedIn: Name - Job Title"
+    const match6 = title.match(/^LinkedIn[:\s]+[^-]+-\s*(.+)$/i);
+    if (match6) return match6[1].trim().replace(/\s*\|.*$/, '').trim();
+
+    // Fallback: OG title would require fetching the page — not possible from tab metadata alone
     return null;
   }
 
   _extractCompanyFromLinkedIn(title) {
     if (!title) return null;
-    const match = title.match(/at\s+([^|@\-]+)/i);
+
+    // Pattern 1: "at Company" (standard)
+    const match = title.match(/at\s+([^|@\-·]+)/i);
     if (match) return match[1].trim().replace(/\s*\|.*$/, '').trim();
+
+    // Pattern 2: "Job Title @ Company" (@ separator)
+    const match2 = title.match(/@\s*([^|@\-·]+)/i);
+    if (match2) return match2[1].trim().replace(/\s*\|.*$/, '').trim();
+
+    // Pattern 3: "at Company | LinkedIn" (pipe after company)
+    const match3 = title.match(/at\s+([^|]+?)\s*\|/i);
+    if (match3) return match3[1].trim();
+
+    // Pattern 4: Company name after em-dash in EU locale: "Name — Job Title at Company · LinkedIn"
+    const match4 = title.match(/[—–]\s*[^·]*at\s+([^·]+?)\s*·/i);
+    if (match4) return match4[1].trim();
+
+    // Pattern 5: "Company Name — LinkedIn" (company page, not profile)
+    const match5 = title.match(/^([^|–—]+?)\s*[|–—].*LinkedIn/i);
+    if (match5) {
+      const candidate = match5[1].trim();
+      if (candidate && !/\b(Profile|LinkedIn)\b/i.test(candidate)) return candidate;
+    }
+
+    // Fallback: OG description would require fetching the page — not possible from tab metadata
     return null;
   }
 

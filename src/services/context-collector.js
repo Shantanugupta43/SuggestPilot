@@ -33,9 +33,21 @@ class ContextCollector {
   async getCurrentPageContext() {
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      
-      const pageInfo = await chrome.tabs.sendMessage(tab.id, { 
-        action: 'getPageContext' 
+
+      // Chrome internal pages cannot receive content script messages
+      const internalPrefixes = ['chrome://', 'chrome-extension://', 'edge://', 'about:'];
+      const isInternalPage = tab.url && internalPrefixes.some(prefix => tab.url.startsWith(prefix));
+
+      if (isInternalPage) {
+        return {
+          title: tab.title || 'Chrome Internal Page',
+          url: tab.url || '',
+          headings: []
+        };
+      }
+
+      const pageInfo = await chrome.tabs.sendMessage(tab.id, {
+        action: 'getPageContext'
       }).catch(() => ({
         title: tab.title || '',
         headings: []

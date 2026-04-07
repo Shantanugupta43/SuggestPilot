@@ -2,7 +2,7 @@
  * Configuration Manager
  */
 
-import { DEFAULT_MAX_TOKENS, DEFAULT_TEMPERATURE } from '../utils/constants.js';
+import { DEFAULT_MAX_TOKENS, DEFAULT_TEMPERATURE, DEFAULT_BLOCKED_DOMAINS } from '../utils/constants.js';
 
 class ConfigManager {
   constructor() {
@@ -27,7 +27,8 @@ class ConfigManager {
         debugMode: stored.config?.debugMode || false,
         blockedSensitiveFields: stored.config?.blockedSensitiveFields || [
           'password', 'passwd', 'pwd', 'credit-card', 'creditcard', 'ssn', 'bank', 'pin', 'cvv', 'api-key', 'token'
-        ]
+        ],
+        blockedDomains: stored.config?.blockedDomains || DEFAULT_BLOCKED_DOMAINS
       };
 
       this.initialized = true;
@@ -115,6 +116,19 @@ class ConfigManager {
     await chrome.storage.local.remove(['config', 'groqApiKey', 'sessionIntent', 'pastSearches', 'extensionEnabled']);
     this.config = null;
     this.initialized = false;
+  }
+
+  getBlockedDomains() {
+    return this.config?.blockedDomains || DEFAULT_BLOCKED_DOMAINS;
+  }
+
+  async setBlockedDomains(domains) {
+    if (!Array.isArray(domains)) {
+      throw new Error('Blocked domains must be an array');
+    }
+    const cleaned = domains.map(d => d.toLowerCase().trim()).filter(Boolean);
+    await this.update({ blockedDomains: cleaned });
+    return cleaned;
   }
 }
 

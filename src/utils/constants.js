@@ -44,14 +44,29 @@ export const SUGGESTION_MIN_INPUT_LENGTH = 1;
 export const SUGGESTION_FOCUSOUT_DELAY = 200;
 export const STATUS_MESSAGE_TIMEOUT = 5000;
 export const SETTINGS_VIEW_DELAY = 1000;
+export const LOADING_TIMEOUT = 15000; // 15 seconds
 
 // Prompt building
 export const PROMPT_TAB_COUNT = 2;
 export const PROMPT_HISTORY_COUNT = 2;
 export const PROMPT_TITLE_SLICE = 40;
 export const PROMPT_PAGE_TITLE_SLICE = 80;
-export const MAX_THREAD_TEXT_LENGTH = 120;
 
 // Session / storage
 export const MAX_CANDIDATE_SLICE = 3;
 export const MAX_FIELD_HEADING_SLICE = 5;
+
+// Default blocked domains — banking, healthcare, government, password managers
+export const DEFAULT_BLOCKED_DOMAINS = [
+  // General
+  'linkedin.com',
+  // Banking
+  'chase.com', 'bankofamerica.com', 'wellsfargo.com', 'citibank.com',
+  'capitalone.com', 'usbank.com', 'pnc.com',
+  // Healthcare
+  'mychart.com', 'kp.org', 'cerner.com', 'followmyhealth.com',
+  // Government
+  'ssa.gov', 'irs.gov', 'uscis.gov', 'va.gov',
+  // Password managers
+  'lastpass.com', '1password.com', 'my.1password.com', 'dashlane.com', 'bitwarden.com'
+];

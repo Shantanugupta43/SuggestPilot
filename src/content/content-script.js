@@ -6,21 +6,34 @@
 
 import { detectOS, detectBrowser } from '../utils/browser-detector.js';
 import { isSpokenLanguageField } from '../utils/language-detector.js';
-import { DEBOUNCE_MS, ADDRESS_BAR_DEBOUNCE_MS, MAX_CANDIDATE_SLICE, MAX_FIELD_HEADING_SLICE } from '../utils/constants.js';
+import { DEBOUNCE_MS, ADDRESS_BAR_DEBOUNCE_MS, MAX_CANDIDATE_SLICE, MAX_FIELD_HEADING_SLICE, LOADING_TIMEOUT, DEFAULT_BLOCKED_DOMAINS } from '../utils/constants.js';
 
 let currentInput = null;
 let suggestionOverlay = null;
 let currentSuggestions = [];
 let activeSuggestionIndex = 0;
 let debounceTimer = null;
+let loadingTimer = null;
 let lastInputValue = '';
 let isAddressBar = false;
 let extensionEnabled = true;
+let blockedDomains = DEFAULT_BLOCKED_DOMAINS;
 
-// Sites where the extension should stay completely silent
-const BLOCKED_DOMAINS = [
-  'linkedin.com'
-];
+async function loadBlockedDomains() {
+  try {
+    const response = await chrome.runtime.sendMessage({ action: 'getBlockedDomains' });
+    if (response && response.success) {
+      blockedDomains = response.domains;
+    }
+  } catch {
+    // Fall back to defaults
+  }
+}
+
+function isBlockedDomain() {
+  const host = window.location.hostname.toLowerCase();
+  return blockedDomains.some(domain => host.includes(domain));
+}
 
 // ── Form-fill detector ────────
 const FORM_FIELD_PATTERNS = {
@@ -308,11 +321,6 @@ const FORM_FIELD_PATTERNS = {
 
   // ── Overlay setup ──────────────────────────────────────────────────────────
 
-  function isBlockedDomain() {
-    const host = window.location.hostname.toLowerCase();
-    return BLOCKED_DOMAINS.some(domain => host.includes(domain));
-  }
-
   async function loadExtensionState() {
     try {
       const stored = await chrome.storage.local.get('extensionEnabled');
@@ -327,6 +335,7 @@ const FORM_FIELD_PATTERNS = {
     if (isBlockedDomain()) {
       return;
     }
+    await loadBlockedDomains();
     await loadExtensionState();
     setupInputTracking();
     setupMessageListener();
@@ -645,6 +654,8 @@ const FORM_FIELD_PATTERNS = {
     suggestionOverlay.style.top = `${top}px`;
     suggestionOverlay.style.width = `${Math.max(rect.width, 320)}px`;
 
+    clearTimeout(loadingTimer);
+
     // Counter pill
     const counter = currentSuggestions.length > 1
       ? `<span style="display:inline-flex;align-items:center;gap:3px;background:rgba(255,255,255,0.12);border-radius:20px;padding:1px 7px;font-size:10px;font-weight:500;letter-spacing:0.02em;">↑↓ ${activeSuggestionIndex + 1}/${currentSuggestions.length}</span>`
@@ -704,6 +715,19 @@ const FORM_FIELD_PATTERNS = {
         Thinking…
       </div>
     `;
+
+    // Auto-dismiss after timeout if no response
+    clearTimeout(loadingTimer);
+    loadingTimer = setTimeout(() => {
+      if (suggestionOverlay && suggestionOverlay.style.display === 'block' && suggestionOverlay.textContent.includes('Thinking')) {
+        suggestionOverlay.innerHTML = `
+          <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:rgba(255,255,255,0.55);font-weight:400;">
+            Timed out — please try again
+          </div>
+        `;
+        setTimeout(() => { hideSuggestion(); }, 3000);
+      }
+    }, LOADING_TIMEOUT);
   }
 
   function updateSuggestionDisplay() {
@@ -712,6 +736,7 @@ const FORM_FIELD_PATTERNS = {
   }
 
   function hideSuggestion() {
+    clearTimeout(loadingTimer);
     if (suggestionOverlay) suggestionOverlay.style.display = 'none';
   }
 
@@ -735,7 +760,7 @@ const FORM_FIELD_PATTERNS = {
     const tagName = element.tagName?.toLowerCase();
     const type = element.type?.toLowerCase();
     if (tagName === 'textarea') return true;
-    if (tagName === 'input' && (type === 'text' || type === 'search' || type === 'url' || !type)) return true;
+    if (tagName === 'input' && (type === 'text' || type === 'search' || type === 'url' || type === 'number' || !type)) return true;
     if (element.contentEditable === 'true') return true;
     if (element.getAttribute('role') === 'textbox') return true;
     return false;
@@ -744,7 +769,15 @@ const FORM_FIELD_PATTERNS = {
   function isSensitiveField(element) {
     if (!element) return false;
     const type = element.type?.toLowerCase();
-    if (type === 'password' || type === 'tel' || type === 'number' || type === 'email') return true;
+    if (type === 'password' || type === 'tel' || type === 'email') return true;
+
+    // Number fields: only block if heuristics suggest sensitive use (PIN, CVV, etc.)
+    if (type === 'number') {
+      const combinedText = `${element.name} ${element.id} ${element.autocomplete} ${element.placeholder}`.toLowerCase();
+      const sensitiveNumberPatterns = ['pin', 'cvv', 'cvc', 'otp', 'verification', 'security_code', 'securitycode', 'card_code'];
+      return sensitiveNumberPatterns.some(k => combinedText.includes(k));
+    }
+
     const combinedText = `${element.name} ${element.id} ${element.autocomplete} ${element.placeholder}`.toLowerCase();
     return ['password', 'passwd', 'credit', 'card', 'cvv', 'ssn', 'bank', 'pin', 'token', 'auth', 'login', 'otp', 'verification'].some(k => combinedText.includes(k));
   }

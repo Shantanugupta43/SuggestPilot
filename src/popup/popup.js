@@ -4,6 +4,7 @@
  */
 
 import { STATUS_MESSAGE_TIMEOUT, SETTINGS_VIEW_DELAY } from '../utils/constants.js';
+import { DEFAULT_BLOCKED_DOMAINS } from '../utils/constants.js';
 
 // Views and elements — declared here, initialized inside initialize() after DOM is ready
 let views = {};
@@ -51,7 +52,12 @@ async function initialize() {
     enableTabAnalysis: document.getElementById('enableTabAnalysis'),
     enableAiChatMode: document.getElementById('enableAiChatMode'),
     saveSettingsBtn: document.getElementById('saveSettingsBtn'),
-    clearDataBtn: document.getElementById('clearDataBtn')
+    clearDataBtn: document.getElementById('clearDataBtn'),
+
+    // Blocked domains
+    blockedDomainsInput: document.getElementById('blockedDomainsInput'),
+    saveBlockedDomainsBtn: document.getElementById('saveBlockedDomainsBtn'),
+    resetBlockedDomainsBtn: document.getElementById('resetBlockedDomainsBtn')
   };
 
   try {
@@ -129,13 +135,16 @@ function setupEventListeners() {
   
   // Extension Toggle
   elements.extensionToggle.addEventListener('change', toggleExtension);
-  
+
   // Actions
   elements.refreshBtn.addEventListener('click', loadSuggestions);
   elements.toggleApiKeyBtn.addEventListener('click', toggleApiKeyVisibility);
   elements.testConnectionBtn.addEventListener('click', testConnection);
   elements.saveSettingsBtn.addEventListener('click', saveSettings);
   elements.clearDataBtn.addEventListener('click', clearData);
+  elements.modelSelect.addEventListener('change', saveModel);
+  elements.saveBlockedDomainsBtn.addEventListener('click', saveBlockedDomains);
+  elements.resetBlockedDomainsBtn.addEventListener('click', resetBlockedDomains);
 }
 
 /**
@@ -394,15 +403,95 @@ function showStatus(message, type = 'info') {
 }
 
 /**
+ * Save selected model to config
+ */
+async function saveModel() {
+  try {
+    const model = elements.modelSelect.value;
+    await chrome.runtime.sendMessage({
+      action: 'updateConfig',
+      data: { updates: { model } }
+    });
+    showStatus(`Model changed to ${model}`, 'success');
+  } catch (error) {
+    console.error('Failed to save model:', error);
+    showStatus('Failed to save model', 'error');
+  }
+}
+
+/**
  * Populate settings from config
  */
 function populateSettings() {
   if (!currentConfig) return;
-  
+
   elements.modelSelect.value = currentConfig.model || 'llama-3.1-8b-instant';
   elements.enableHistoryTracking.checked = currentConfig.enableHistoryTracking ?? true;
   elements.enableTabAnalysis.checked = currentConfig.enableTabAnalysis ?? true;
   elements.enableAiChatMode.checked = currentConfig.enableAiChatMode ?? true;
+
+  // Load blocked domains
+  loadBlockedDomainsUI();
+}
+
+/**
+ * Load blocked domains into the textarea
+ */
+async function loadBlockedDomainsUI() {
+  try {
+    const response = await chrome.runtime.sendMessage({ action: 'getBlockedDomains' });
+    if (response && response.success) {
+      elements.blockedDomainsInput.value = response.domains.join('\n');
+    }
+  } catch (error) {
+    console.error('Failed to load blocked domains:', error);
+  }
+}
+
+/**
+ * Save blocked domains
+ */
+async function saveBlockedDomains() {
+  try {
+    const domains = elements.blockedDomainsInput.value
+      .split('\n')
+      .map(d => d.trim())
+      .filter(Boolean);
+
+    const response = await chrome.runtime.sendMessage({
+      action: 'setBlockedDomains',
+      data: { domains }
+    });
+
+    if (response.success) {
+      showStatus('Blocked domains updated', 'success');
+    } else {
+      showStatus(response.error || 'Failed to update', 'error');
+    }
+  } catch (error) {
+    console.error('Failed to save blocked domains:', error);
+    showStatus('Failed to update blocked domains', 'error');
+  }
+}
+
+/**
+ * Reset blocked domains to defaults
+ */
+async function resetBlockedDomains() {
+  try {
+    const response = await chrome.runtime.sendMessage({
+      action: 'setBlockedDomains',
+      data: { domains: DEFAULT_BLOCKED_DOMAINS }
+    });
+
+    if (response.success) {
+      await loadBlockedDomainsUI();
+      showStatus('Blocked domains reset to defaults', 'success');
+    }
+  } catch (error) {
+    console.error('Failed to reset blocked domains:', error);
+    showStatus('Failed to reset blocked domains', 'error');
+  }
 }
 
 /**

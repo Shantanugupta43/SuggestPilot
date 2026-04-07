@@ -74,6 +74,15 @@ async function handleMessage(request, sender) {
     case 'getSessionIntent':
       return { success: true, intent: await sessionTracker.getIntentContext() };
 
+    case 'getBlockedDomains':
+      await configManager.initialize();
+      return { success: true, domains: configManager.getBlockedDomains() };
+
+    case 'setBlockedDomains':
+      await configManager.initialize();
+      const domains = await configManager.setBlockedDomains(data.domains);
+      return { success: true, domains };
+
     default:
       throw new Error(`Unknown action: ${action}`);
   }

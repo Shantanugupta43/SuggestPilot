@@ -16,7 +16,17 @@ import {
 class GroqService {
   constructor() {
     this.baseURL = GROQ_BASE_URL;
-    this.model = GROQ_MODEL;
+  }
+
+  /**
+   * Resolve the model from configManager, falling back to the default.
+   */
+  _resolveModel() {
+    try {
+      return configManager.get('model') || GROQ_MODEL;
+    } catch {
+      return GROQ_MODEL;
+    }
   }
 
   async generateSuggestions(context) {
@@ -77,7 +87,7 @@ class GroqService {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: this.model,
+        model: this._resolveModel(),
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: prompt }
@@ -319,7 +329,7 @@ Format:
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          model: this.model,
+          model: this._resolveModel(),
           messages: [
             { role: 'system', content: 'Respond with only: {"status": "ok"}' },
             { role: 'user', content: 'test' }
