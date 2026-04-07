@@ -62,8 +62,8 @@ async function handleMessage(request, sender) {
 
     case 'testConnection':
       await configManager.initialize();
-      const isConnected = await groqService.testConnection();
-      return { success: isConnected };
+      const result = await groqService.testConnection();
+      return result;
 
     case 'clearConfig':
       await configManager.clear();

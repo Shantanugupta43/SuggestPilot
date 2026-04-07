@@ -42,13 +42,23 @@ class ConfigManager {
     return this.config.groqApiKey;
   }
 
-  async setApiKey(apiKey) {
+  validateApiKey(apiKey) {
     if (!apiKey || typeof apiKey !== 'string') {
-      throw new Error('Invalid API key');
+      return { valid: false, error: 'Invalid API key' };
     }
-
     if (!apiKey.startsWith('gsk_')) {
-      throw new Error('Invalid format. Groq keys start with "gsk_"');
+      return { valid: false, error: 'Invalid format. Groq API keys start with "gsk_"' };
+    }
+    if (apiKey.length < 10) {
+      return { valid: false, error: 'API key is too short' };
+    }
+    return { valid: true };
+  }
+
+  async setApiKey(apiKey) {
+    const validation = this.validateApiKey(apiKey);
+    if (!validation.valid) {
+      throw new Error(validation.error);
     }
 
     await chrome.storage.local.set({ groqApiKey: apiKey });

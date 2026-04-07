@@ -328,10 +328,29 @@ Format:
           temperature: 0
         })
       });
-      return response.ok;
+
+      if (!response.ok) {
+        let errorMessage = `API Error: ${response.status}`;
+        try {
+          const errorBody = await response.json();
+          if (response.status === 401) {
+            errorMessage = 'Invalid API key';
+          } else if (response.status === 429) {
+            errorMessage = 'Rate limited — try again later';
+          } else if (errorBody.error?.message) {
+            errorMessage = errorBody.error.message;
+          }
+        } catch {
+          // If we can't parse the error body, fall back to status-based message
+          if (response.status === 401) errorMessage = 'Invalid API key';
+          else if (response.status === 429) errorMessage = 'Rate limited — try again later';
+        }
+        return { success: false, error: errorMessage };
+      }
+
+      return { success: true };
     } catch (error) {
-      console.error('API connection test failed:', error);
-      return false;
+      return { success: false, error: `Connection failed: ${error.message}` };
     }
   }
 

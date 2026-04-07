@@ -419,23 +419,24 @@ async function testConnection() {
     elements.testConnectionBtn.disabled = true;
     elements.testConnectionBtn.textContent = 'Testing...';
     elements.connectionStatus.classList.add('hidden');
-    
-    const response = await chrome.runtime.sendMessage({ 
-      action: 'testConnection' 
+
+    const response = await chrome.runtime.sendMessage({
+      action: 'testConnection'
     });
-    
+
     elements.connectionStatus.classList.remove('hidden');
-    
+
     if (response.success) {
       elements.connectionStatus.textContent = '✔ Connection successful';
       elements.connectionStatus.className = 'connection-status success';
     } else {
-      elements.connectionStatus.textContent = '✗ Connection failed';
+      const errorMessage = response.error || 'Connection failed';
+      elements.connectionStatus.textContent = `✗ ${errorMessage}`;
       elements.connectionStatus.className = 'connection-status error';
     }
   } catch (error) {
     elements.connectionStatus.classList.remove('hidden');
-    elements.connectionStatus.textContent = '✗ Connection failed: ' + error.message;
+    elements.connectionStatus.textContent = `✗ Connection failed: ${error.message}`;
     elements.connectionStatus.className = 'connection-status error';
   } finally {
     elements.testConnectionBtn.disabled = false;
@@ -450,14 +451,18 @@ async function saveSettings() {
   try {
     elements.saveSettingsBtn.disabled = true;
     elements.saveSettingsBtn.textContent = 'Saving...';
-    
-    // Save API key if provided
+
+    // Validate and save API key if provided
     const apiKey = elements.apiKeyInput.value.trim();
     if (apiKey) {
-      await chrome.runtime.sendMessage({
+      const keyResponse = await chrome.runtime.sendMessage({
         action: 'setApiKey',
         data: { apiKey }
       });
+      if (!keyResponse.success) {
+        showStatus(keyResponse.error || 'Failed to save API key', 'error');
+        return;
+      }
       elements.apiKeyInput.value = '';
     }
     
