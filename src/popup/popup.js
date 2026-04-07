@@ -3,42 +3,9 @@
  * Handles UI interactions and communication with background script
  */
 
-// Views
-const views = {
-  notConfigured: document.getElementById('notConfiguredView'),
-  main: document.getElementById('mainView'),
-  settings: document.getElementById('settingsView')
-};
-
-// Elements
-const elements = {
-  // Main view
-  statusBar: document.getElementById('statusBar'),
-  statusText: document.getElementById('statusText'),
-  loadingState: document.getElementById('loadingState'),
-  emptyState: document.getElementById('emptyState'),
-  suggestionsList: document.getElementById('suggestionsList'),
-  refreshBtn: document.getElementById('refreshBtn'),
-  
-  // Toggle
-  extensionToggle: document.getElementById('extensionToggle'),
-  toggleStatus: document.getElementById('toggleStatus'),
-  
-  // Settings view
-  settingsBtn: document.getElementById('settingsBtn'),
-  backBtn: document.getElementById('backBtn'),
-  goToSettingsBtn: document.getElementById('goToSettingsBtn'),
-  apiKeyInput: document.getElementById('apiKeyInput'),
-  toggleApiKeyBtn: document.getElementById('toggleApiKeyBtn'),
-  modelSelect: document.getElementById('modelSelect'),
-  testConnectionBtn: document.getElementById('testConnectionBtn'),
-  connectionStatus: document.getElementById('connectionStatus'),
-  enableHistoryTracking: document.getElementById('enableHistoryTracking'),
-  enableTabAnalysis: document.getElementById('enableTabAnalysis'),
-  enableAiChatMode: document.getElementById('enableAiChatMode'),
-  saveSettingsBtn: document.getElementById('saveSettingsBtn'),
-  clearDataBtn: document.getElementById('clearDataBtn')
-};
+// Views and elements — declared here, initialized inside initialize() after DOM is ready
+let views = {};
+let elements = {};
 
 // State
 let currentConfig = { isConfigured: false, model: "llama-3.1-8b-instant", enableHistoryTracking: true, enableTabAnalysis: true, enableAiChatMode: true };
@@ -49,6 +16,42 @@ let extensionEnabled = true;
  * Initialize popup
  */
 async function initialize() {
+  // Initialize views and elements after DOM is guaranteed ready
+  views = {
+    notConfigured: document.getElementById('notConfiguredView'),
+    main: document.getElementById('mainView'),
+    settings: document.getElementById('settingsView')
+  };
+
+  elements = {
+    // Main view
+    statusBar: document.getElementById('statusBar'),
+    statusText: document.getElementById('statusText'),
+    loadingState: document.getElementById('loadingState'),
+    emptyState: document.getElementById('emptyState'),
+    suggestionsList: document.getElementById('suggestionsList'),
+    refreshBtn: document.getElementById('refreshBtn'),
+
+    // Toggle
+    extensionToggle: document.getElementById('extensionToggle'),
+    toggleStatus: document.getElementById('toggleStatus'),
+
+    // Settings view
+    settingsBtn: document.getElementById('settingsBtn'),
+    backBtn: document.getElementById('backBtn'),
+    goToSettingsBtn: document.getElementById('goToSettingsBtn'),
+    apiKeyInput: document.getElementById('apiKeyInput'),
+    toggleApiKeyBtn: document.getElementById('toggleApiKeyBtn'),
+    modelSelect: document.getElementById('modelSelect'),
+    testConnectionBtn: document.getElementById('testConnectionBtn'),
+    connectionStatus: document.getElementById('connectionStatus'),
+    enableHistoryTracking: document.getElementById('enableHistoryTracking'),
+    enableTabAnalysis: document.getElementById('enableTabAnalysis'),
+    enableAiChatMode: document.getElementById('enableAiChatMode'),
+    saveSettingsBtn: document.getElementById('saveSettingsBtn'),
+    clearDataBtn: document.getElementById('clearDataBtn')
+  };
+
   try {
     await loadConfig();
     await loadExtensionState();
