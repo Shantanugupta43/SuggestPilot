@@ -56,10 +56,7 @@ class ContextCollector {
     try {
       const tabs = await chrome.tabs.query({ currentWindow: true });
       const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      
-      console.log('🔍 Total tabs in window:', tabs.length);
-      console.log('📍 Current active tab:', currentTab?.title);
-      
+
       const sensitiveDomains = [
         'bank', 'login', 'signin', 'auth', 'payment',
         'checkout', 'account', 'admin', 'dashboard'
@@ -69,15 +66,11 @@ class ContextCollector {
         .filter(tab => {
           // EXCLUDE the current active tab
           if (tab.id === currentTab?.id) {
-            console.log('⏭️ Skipping current active tab:', tab.title);
             return false;
           }
-          
+
           const url = tab.url?.toLowerCase() || '';
           const isFiltered = sensitiveDomains.some(domain => url.includes(domain));
-          if (isFiltered) {
-            console.log('🚫 Filtered sensitive tab:', tab.title);
-          }
           return !isFiltered;
         })
         .slice(0, 5) // Get top 5 OTHER tabs
@@ -85,11 +78,6 @@ class ContextCollector {
           title: tab.title || '',
           url: tab.url || ''
         }));
-
-      console.log('Other tabs collected (excluding current):', activeTabs.length);
-      activeTabs.forEach((tab, i) => {
-        console.log(`  ${i + 1}. "${tab.title}"`);
-      });
 
       return activeTabs;
     } catch (error) {
