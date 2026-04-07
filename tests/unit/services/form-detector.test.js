@@ -167,6 +167,36 @@ describe('FormDetector', () => {
         });
       }
     });
+
+    /**
+     * BUG DOCUMENTATION: _detectOS checks `Windows NT 11` but real Windows 11
+     * browsers still report `Windows NT 10.0` in the UA string — identical to
+     * Windows 10. The `Windows NT 11` branch is dead code and can never match.
+     *
+     * This test documents the current (broken) behaviour so that when the source
+     * is fixed (e.g. via navigator.userAgentData), the test will be updated too.
+     */
+    it('[BUG] Windows 11 UA string is reported as "Windows NT 10.0", not "NT 11" — _detectOS returns "Windows 10"', () => {
+      const realWindows11UA =
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
+        '(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+
+      const originalUA = Object.getOwnPropertyDescriptor(navigator, 'userAgent');
+      Object.defineProperty(navigator, 'userAgent', {
+        value: realWindows11UA,
+        configurable: true
+      });
+
+      const result = detector._detectOS();
+
+      // Expected (correct) value would be 'Windows 11', but _detectOS
+      // cannot distinguish it from Windows 10 via UA string alone.
+      expect(result).toBe('Windows 10'); // documents the current incorrect output
+
+      if (originalUA) {
+        Object.defineProperty(navigator, 'userAgent', originalUA);
+      }
+    });
   });
 
   // ── _buildCandidates — tab-based candidates ────────────────────────────────

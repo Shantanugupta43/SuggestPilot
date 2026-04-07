@@ -110,6 +110,9 @@ describe('GroqService', () => {
       expect(fetch).toHaveBeenCalledTimes(1);
       expect(result.suggestions).toHaveLength(2);
       expect(result.suggestions[0].text).toContain('React hooks');
+      // The API path must NOT set isFormFill — if it did, the form-fill shortcut
+      // would be indistinguishable from a normal AI response
+      expect(result.isFormFill).toBeFalsy();
     });
 
     it('marks form-fill results with isFormFill: true', async () => {
@@ -287,8 +290,11 @@ describe('GroqService', () => {
     });
 
     it('returns empty suggestions for malformed content', () => {
+      // parseResponse calls console.error intentionally — suppress it to keep CI output clean
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
       const result = service.parseResponse('this is not json at all');
       expect(result.suggestions).toEqual([]);
+      consoleSpy.mockRestore();
     });
 
     it('filters out suggestions shorter than 3 chars', () => {

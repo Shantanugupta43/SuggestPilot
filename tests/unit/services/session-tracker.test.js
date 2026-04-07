@@ -106,8 +106,9 @@ describe('SessionTracker', () => {
   // ── session expiry ─────────────────────────────────────────────────────────
 
   describe('session expiry', () => {
-    it('starts a fresh session when stored session is stale (> 2 hours)', async () => {
-      const staleTime = Date.now() - 3 * 60 * 60 * 1000; // 3 hours ago
+    it('starts a fresh session when stored session is stale (> SESSION_TTL_MS)', async () => {
+      // Use the actual TTL constant so this test stays correct if the TTL changes
+      const staleTime = Date.now() - (tracker.SESSION_TTL_MS + 60 * 1000); // TTL + 1 min
       __seedStorage({
         sessionIntent: {
           queries: [{ text: 'old query', suggestions: [], timestamp: staleTime }],
@@ -123,6 +124,23 @@ describe('SessionTracker', () => {
       // Summary should only contain the new query, not the stale one
       expect(ctx.recentThread).toBe('fresh query');
       expect(ctx.recentThread).not.toContain('old query');
+    });
+
+    it('does NOT reset a session that is still within SESSION_TTL_MS', async () => {
+      // 1 minute before expiry — session should be preserved
+      const recentTime = Date.now() - (tracker.SESSION_TTL_MS - 60 * 1000);
+      __seedStorage({
+        sessionIntent: {
+          queries: [{ text: 'active query', suggestions: [], timestamp: recentTime }],
+          sessionSummary: 'Researching: active',
+          recentThread: 'active query',
+          startedAt: recentTime,
+          updatedAt: recentTime
+        }
+      });
+
+      const ctx = await tracker.getIntentContext();
+      expect(ctx.recentThread).toContain('active query');
     });
   });
 
