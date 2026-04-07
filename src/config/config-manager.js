@@ -2,6 +2,8 @@
  * Configuration Manager
  */
 
+import { DEFAULT_MAX_TOKENS, DEFAULT_TEMPERATURE } from '../utils/constants.js';
+
 class ConfigManager {
   constructor() {
     this.config = null;
@@ -17,8 +19,8 @@ class ConfigManager {
       this.config = {
         groqApiKey: stored.groqApiKey || null,
         model: stored.config?.model || 'llama-3.1-8b-instant',
-        maxTokens: stored.config?.maxTokens || 150,
-        temperature: stored.config?.temperature || 0.3,
+        maxTokens: stored.config?.maxTokens || DEFAULT_MAX_TOKENS,
+        temperature: stored.config?.temperature || DEFAULT_TEMPERATURE,
         enableHistoryTracking: stored.config?.enableHistoryTracking ?? true,
         enableTabAnalysis: stored.config?.enableTabAnalysis ?? true,
         enableAiChatMode: stored.config?.enableAiChatMode ?? true,
@@ -71,9 +73,31 @@ class ConfigManager {
 
   async update(updates) {
     const currentConfig = await chrome.storage.local.get('config');
-    const newConfig = { ...currentConfig.config, ...updates };
+    const newConfig = this._deepMerge(currentConfig.config || {}, updates);
     await chrome.storage.local.set({ config: newConfig });
-    this.config = { ...this.config, ...updates };
+    this.config = this._deepMerge(this.config || {}, updates);
+  }
+
+  /**
+   * Recursively merge source into target, preserving nested keys not in source.
+   */
+  _deepMerge(target, source) {
+    const result = { ...target };
+    for (const key of Object.keys(source)) {
+      if (
+        source[key] &&
+        typeof source[key] === 'object' &&
+        !Array.isArray(source[key]) &&
+        target[key] &&
+        typeof target[key] === 'object' &&
+        !Array.isArray(target[key])
+      ) {
+        result[key] = this._deepMerge(target[key], source[key]);
+      } else {
+        result[key] = source[key];
+      }
+    }
+    return result;
   }
 
   isConfigured() {

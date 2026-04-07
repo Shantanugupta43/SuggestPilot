@@ -3,6 +3,11 @@
  * Gathers browsing context from the current page and browser state
  */
 
+import {
+  MAX_ACTIVE_TABS, MAX_HISTORY_RESULTS, MAX_TOP_VISITED,
+  MAX_AI_TABS, MAX_HEADING_COUNT
+} from '../utils/constants.js';
+
 class ContextCollector {
   /**
    * Collect full context for suggestion generation
@@ -39,7 +44,7 @@ class ContextCollector {
       return {
         title: pageInfo.title || tab.title || '',
         url: tab.url || '',
-        headings: (pageInfo.headings || []).slice(0, 3) // Only top 3 headings
+        headings: (pageInfo.headings || []).slice(0, MAX_HEADING_COUNT)
         // Removed summary and mainContent to save tokens
       };
     } catch (error) {
@@ -73,7 +78,7 @@ class ContextCollector {
           const isFiltered = sensitiveDomains.some(domain => url.includes(domain));
           return !isFiltered;
         })
-        .slice(0, 5) // Get top 5 OTHER tabs
+        .slice(0, MAX_ACTIVE_TABS) // Get top 5 OTHER tabs
         .map(tab => ({
           title: tab.title || '',
           url: tab.url || ''
@@ -113,7 +118,7 @@ class ContextCollector {
       const history = await chrome.history.search({
         text: '',
         startTime: twoHoursAgo,
-        maxResults: 15 // Reduced for token efficiency
+        maxResults: MAX_HISTORY_RESULTS // Reduced for token efficiency
       });
 
       const filtered = history
@@ -149,7 +154,7 @@ class ContextCollector {
       const history = await chrome.history.search({
         text: '',
         startTime: oneWeekAgo,
-        maxResults: 50 // Reduced sample size
+        maxResults: 50 // Top-visited sample size
       });
 
       const topTitles = history
@@ -164,7 +169,7 @@ class ContextCollector {
                  item.visitCount > 1;
         })
         .sort((a, b) => b.visitCount - a.visitCount)
-        .slice(0, 5) // Reduced to top 5
+        .slice(0, MAX_TOP_VISITED) // Reduced to top 5
         .map(item => ({
           title: item.title || '',
           url: item.url || '',
@@ -193,7 +198,7 @@ class ContextCollector {
       const history = await chrome.history.search({
         text: '',
         startTime: oneHourAgo,
-        maxResults: 20 // Reduced sample
+        maxResults: 20 // AI-tab sample
       });
 
       const aiTabs = history
@@ -201,7 +206,7 @@ class ContextCollector {
           const url = item.url?.toLowerCase() || '';
           return aiDomains.some(domain => url.includes(domain));
         })
-        .slice(0, 3) // Reduced to 3 for token efficiency
+        .slice(0, MAX_AI_TABS) // Reduced to 3 for token efficiency
         .map(item => ({
           title: item.title || '',
           url: item.url || '',

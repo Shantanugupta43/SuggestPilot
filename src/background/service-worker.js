@@ -9,6 +9,7 @@ import groqService from '../services/groq-service.js';
 import contextCollector from '../services/context-collector.js';
 import sessionTracker from '../services/session-tracker.js';
 import formDetector from '../services/form-detector.js';
+import { MAX_PAST_SEARCHES } from '../utils/constants.js';
 
 chrome.runtime.onInstalled.addListener(async () => {
   await configManager.initialize();
@@ -169,7 +170,7 @@ async function storePastSearch(query, suggestions) {
     const stored = await chrome.storage.local.get('pastSearches');
     const pastSearches = stored.pastSearches || [];
     pastSearches.unshift({ query, suggestions, timestamp: Date.now() });
-    await chrome.storage.local.set({ pastSearches: pastSearches.slice(0, 50) });
+    await chrome.storage.local.set({ pastSearches: pastSearches.slice(0, MAX_PAST_SEARCHES) });
   } catch (error) {
     console.error('Storage error:', error);
   }

@@ -3,6 +3,8 @@
  * Handles UI interactions and communication with background script
  */
 
+import { STATUS_MESSAGE_TIMEOUT, SETTINGS_VIEW_DELAY } from '../utils/constants.js';
+
 // Views and elements — declared here, initialized inside initialize() after DOM is ready
 let views = {};
 let elements = {};
@@ -237,7 +239,7 @@ async function insertSuggestion(text) {
     
     if (response.success) {
       showStatus('Suggestion inserted', 'success');
-      setTimeout(() => window.close(), 1000);
+      setTimeout(() => window.close(), SETTINGS_VIEW_DELAY);
     } else {
       showStatus('Failed to insert suggestion', 'error');
     }
@@ -388,7 +390,7 @@ function showStatus(message, type = 'info') {
   
   setTimeout(() => {
     elements.statusBar.classList.add('hidden');
-  }, 5000);
+  }, STATUS_MESSAGE_TIMEOUT);
 }
 
 /**
@@ -483,7 +485,7 @@ async function saveSettings() {
     await loadConfig();
     
     if (currentConfig.isConfigured) {
-      setTimeout(() => showView('main'), 1000);
+      setTimeout(() => showView('main'), SETTINGS_VIEW_DELAY);
     }
   } catch (error) {
     console.error('Failed to save settings:', error);
