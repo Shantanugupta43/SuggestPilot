@@ -692,14 +692,22 @@
     if (!suggestionOverlay) return;
 
     const rect = input.getBoundingClientRect();
-    let top = rect.bottom + window.scrollY + 10;
+    const gap = isAddressBar ? 14 : 10;
     const left = rect.left + window.scrollX;
-    if (isAddressBar) top = rect.bottom + window.scrollY + 14;
+    const spaceBelow = window.innerHeight - rect.bottom - gap;
+    const showAbove = spaceBelow < 160 && rect.top > 160;
 
-    suggestionOverlay.style.display = 'block';
+    suggestionOverlay.style.transform = 'none';
     suggestionOverlay.style.left = `${left}px`;
-    suggestionOverlay.style.top = `${top}px`;
     suggestionOverlay.style.width = `${Math.max(rect.width, 320)}px`;
+    if (showAbove) {
+      suggestionOverlay.style.top = 'auto';
+      suggestionOverlay.style.bottom = `${window.innerHeight - rect.top + gap}px`;
+    } else {
+      suggestionOverlay.style.top = `${rect.bottom + window.scrollY + gap}px`;
+      suggestionOverlay.style.bottom = 'auto';
+    }
+    suggestionOverlay.style.display = 'block';
 
     // Counter pill
     const counter = currentSuggestions.length > 1
@@ -743,13 +751,21 @@
   function showSuggestionLoading(input) {
     if (!suggestionOverlay) return;
     const rect = input.getBoundingClientRect();
-    let top = rect.bottom + window.scrollY + 10;
+    const gap = isAddressBar ? 14 : 10;
     const left = rect.left + window.scrollX;
-    if (isAddressBar) top = rect.bottom + window.scrollY + 14;
+    const spaceBelow = window.innerHeight - rect.bottom - gap;
+    const showAbove = spaceBelow < 60 && rect.top > 60;
 
-    suggestionOverlay.style.display = 'block';
+    suggestionOverlay.style.transform = 'none';
     suggestionOverlay.style.left = `${left}px`;
-    suggestionOverlay.style.top = `${top}px`;
+    if (showAbove) {
+      suggestionOverlay.style.top = 'auto';
+      suggestionOverlay.style.bottom = `${window.innerHeight - rect.top + gap}px`;
+    } else {
+      suggestionOverlay.style.top = `${rect.bottom + window.scrollY + gap}px`;
+      suggestionOverlay.style.bottom = 'auto';
+    }
+    suggestionOverlay.style.display = 'block';
     suggestionOverlay.innerHTML = `
       <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:rgba(255,255,255,0.55);font-weight:400;">
         <span style="display:inline-flex;gap:3px;align-items:center;">
