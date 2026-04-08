@@ -45,18 +45,13 @@ let currentConfig = { isConfigured: false, model: "llama-3.1-8b-instant", enable
 let currentSuggestions = null;
 let extensionEnabled = true;
 
-/**
- * Initialize popup
- */
-async function initialize() {
-  try {
-    await loadConfig();
-    await loadExtensionState();
-    await loadDarkMode()
-    setupEventListeners();
+// FIX 1: loadDarkMode extracted out of initialize() as its own top-level function
+const sign = document.getElementById('text');
+const outer = document.getElementById("outerbox");
+const inner = document.getElementById("innerbox");
+const text = document.getElementById("darkmode");
 
-    
-    async function loadDarkMode() {
+async function loadDarkMode() {
   const result = await chrome.storage.local.get('darkMode');
   const isDark = result.darkMode;
 
@@ -70,6 +65,16 @@ async function initialize() {
     sign.textContent = "X";
   }
 }
+
+/**
+ * Initialize popup
+ */
+async function initialize() {
+  try {
+    await loadConfig();
+    await loadExtensionState();
+    await loadDarkMode();
+    setupEventListeners();
 
     if (currentConfig && currentConfig.isConfigured) {
       showView('main');
@@ -223,11 +228,14 @@ function createSuggestionCard(suggestion, index) {
   
   card.appendChild(textEl);
   
-  // Add derivation explanation if available
+  // FIX 2: Use safe DOM construction instead of innerHTML to prevent XSS
   if (derivation) {
     const derivationEl = document.createElement('div');
     derivationEl.className = 'suggestion-derivation';
-    derivationEl.innerHTML = `<strong>Why:</strong> ${derivation}`;
+    const strong = document.createElement('strong');
+    strong.textContent = 'Why: ';
+    derivationEl.appendChild(strong);
+    derivationEl.appendChild(document.createTextNode(derivation));
     card.appendChild(derivationEl);
   }
   
@@ -329,14 +337,8 @@ async function toggleExtension() {
 }
 
 /**
- * dark mode toggle
- *  */ 
-
-const sign = document.getElementById('text');
-const outer = document.getElementById("outerbox");
-const inner = document.getElementById("innerbox");
-const text =document.getElementById("darkmode")
-
+ * Dark mode toggle
+ */
 async function changeText() {
   const isDark = document.body.classList.contains('dark');
 
@@ -346,28 +348,18 @@ async function changeText() {
     inner.classList.add("active");
     document.body.classList.add('dark');
     text.classList.add("active");
-
-    // ✅ Save state
     await chrome.storage.local.set({ darkMode: true });
-
   } else {
     sign.textContent = "X";
     outer.classList.remove("active");
     inner.classList.remove("active");
     document.body.classList.remove('dark');
     text.classList.remove("active");
-
-    // ✅ Save state
     await chrome.storage.local.set({ darkMode: false });
   }
 }
 
 outer.addEventListener('click', changeText);
-
-
-
-
-
 
 /**
  * Update toggle status text
