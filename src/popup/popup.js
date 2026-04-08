@@ -45,6 +45,27 @@ let currentConfig = { isConfigured: false, model: "llama-3.1-8b-instant", enable
 let currentSuggestions = null;
 let extensionEnabled = true;
 
+// FIX 1: loadDarkMode extracted out of initialize() as its own top-level function
+const sign = document.getElementById('text');
+const outer = document.getElementById("outerbox");
+const inner = document.getElementById("innerbox");
+const text = document.getElementById("darkmode");
+
+async function loadDarkMode() {
+  const result = await chrome.storage.local.get('darkMode');
+  const isDark = result.darkMode;
+
+  if (isDark) {
+    sign.textContent = "✔";
+    outer.classList.add("active");
+    inner.classList.add("active");
+    document.body.classList.add('dark');
+    text.classList.add("active");
+  } else {
+    sign.textContent = "X";
+  }
+}
+
 /**
  * Initialize popup
  */
@@ -52,6 +73,7 @@ async function initialize() {
   try {
     await loadConfig();
     await loadExtensionState();
+    await loadDarkMode();
     setupEventListeners();
 
     if (currentConfig && currentConfig.isConfigured) {
@@ -206,11 +228,14 @@ function createSuggestionCard(suggestion, index) {
   
   card.appendChild(textEl);
   
-  // Add derivation explanation if available
+  // FIX 2: Use safe DOM construction instead of innerHTML to prevent XSS
   if (derivation) {
     const derivationEl = document.createElement('div');
     derivationEl.className = 'suggestion-derivation';
-    derivationEl.innerHTML = `<strong>Why:</strong> ${derivation}`;
+    const strong = document.createElement('strong');
+    strong.textContent = 'Why: ';
+    derivationEl.appendChild(strong);
+    derivationEl.appendChild(document.createTextNode(derivation));
     card.appendChild(derivationEl);
   }
   
@@ -312,38 +337,29 @@ async function toggleExtension() {
 }
 
 /**
- * dark mode toggle
- *  */ 
+ * Dark mode toggle
+ */
+async function changeText() {
+  const isDark = document.body.classList.contains('dark');
 
-const sign = document.getElementById('text');
-const outer = document.getElementById("outerbox");
-const inner = document.getElementById("innerbox");
-const text =document.getElementById("darkmode")
-
-function changeText() {
-  if (sign.textContent == "X") {
+  if (!isDark) {
     sign.textContent = "✔";
-    outer.classList.toggle("active");
-    inner.classList.toggle("active");
+    outer.classList.add("active");
+    inner.classList.add("active");
     document.body.classList.add('dark');
-    text.classList.toggle("active");
-    
-
+    text.classList.add("active");
+    await chrome.storage.local.set({ darkMode: true });
   } else {
     sign.textContent = "X";
-    outer.classList.toggle("active");
-    inner.classList.toggle("active");
+    outer.classList.remove("active");
+    inner.classList.remove("active");
     document.body.classList.remove('dark');
-     text.classList.toggle("active");
+    text.classList.remove("active");
+    await chrome.storage.local.set({ darkMode: false });
   }
 }
 
 outer.addEventListener('click', changeText);
-
-
-
-
-
 
 /**
  * Update toggle status text
