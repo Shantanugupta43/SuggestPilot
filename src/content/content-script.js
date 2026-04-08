@@ -329,6 +329,13 @@
       }
     }, true);
 
+    window.addEventListener('scroll', () => {
+      if (suggestionOverlay?.style.display === 'block' && currentInput) positionOverlay(currentInput);
+    }, true);
+    window.addEventListener('resize', () => {
+      if (suggestionOverlay?.style.display === 'block' && currentInput) positionOverlay(currentInput);
+    });
+
     if (window.location.href.includes('claude.ai')) setupClaudeInputDetection();
   }
 
@@ -561,6 +568,7 @@
   function positionOverlay(input) {
     if (!suggestionOverlay || !input) return;
 
+    const anchorRect = getOverlayAnchorRect(input);
     const rect = input.getBoundingClientRect();
     const spacing = isAddressBar ? 14 : 10;
     const viewportPadding = 12;
@@ -572,12 +580,12 @@
     suggestionOverlay.style.width = `${overlayWidth}px`;
 
     const overlayHeight = suggestionOverlay.offsetHeight || 48;
-    const spaceBelow = window.innerHeight - rect.bottom;
-    const spaceAbove = rect.top;
+    const spaceBelow = window.innerHeight - anchorRect.bottom;
+    const spaceAbove = anchorRect.top;
 
-    let top = rect.bottom + spacing;
+    let top = anchorRect.bottom + spacing;
     if (spaceBelow < overlayHeight + viewportPadding && spaceAbove > overlayHeight + viewportPadding) {
-      top = Math.max(viewportPadding, rect.top - overlayHeight - spacing);
+      top = Math.max(viewportPadding, anchorRect.top - overlayHeight - spacing);
     }
 
     const maxLeft = window.innerWidth - overlayWidth - viewportPadding;
@@ -588,6 +596,98 @@
 
     suggestionOverlay.style.left = `${left}px`;
     suggestionOverlay.style.top = `${top}px`;
+  }
+
+  function getOverlayAnchorRect(input) {
+    if (!input) return { top: 0, bottom: 0, left: 0, right: 0, width: 0, height: 0 };
+
+    const tagName = input.tagName?.toLowerCase();
+    if (tagName === 'textarea') {
+      return getTextareaCaretRect(input);
+    }
+
+    if (input.contentEditable === 'true' || input.getAttribute('role') === 'textbox') {
+      const selection = window.getSelection();
+      if (selection && selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0).cloneRange();
+        range.collapse(false);
+        const rect = range.getClientRects()[0] || range.getBoundingClientRect();
+        if (rect && (rect.width || rect.height || rect.top || rect.left)) return rect;
+      }
+    }
+
+    return input.getBoundingClientRect();
+  }
+
+  function getTextareaCaretRect(textarea) {
+    const rect = textarea.getBoundingClientRect();
+    const selectionStart = typeof textarea.selectionStart === 'number'
+      ? textarea.selectionStart
+      : textarea.value.length;
+    const computed = window.getComputedStyle(textarea);
+    const mirror = document.createElement('div');
+    const properties = [
+      'boxSizing',
+      'width',
+      'paddingTop',
+      'paddingRight',
+      'paddingBottom',
+      'paddingLeft',
+      'borderTopWidth',
+      'borderRightWidth',
+      'borderBottomWidth',
+      'borderLeftWidth',
+      'fontFamily',
+      'fontSize',
+      'fontWeight',
+      'fontStyle',
+      'lineHeight',
+      'letterSpacing',
+      'textTransform',
+      'textIndent',
+      'textAlign',
+      'whiteSpace',
+      'wordBreak',
+      'overflowWrap',
+      'tabSize'
+    ];
+
+    mirror.style.position = 'fixed';
+    mirror.style.top = '0';
+    mirror.style.left = '-9999px';
+    mirror.style.visibility = 'hidden';
+    mirror.style.pointerEvents = 'none';
+    mirror.style.whiteSpace = 'pre-wrap';
+    mirror.style.wordWrap = 'break-word';
+    mirror.style.overflow = 'hidden';
+
+    for (const property of properties) {
+      mirror.style[property] = computed[property];
+    }
+
+    const beforeCaret = textarea.value.slice(0, selectionStart);
+    const afterCaret = textarea.value.slice(selectionStart);
+    mirror.textContent = beforeCaret;
+
+    const marker = document.createElement('span');
+    marker.textContent = afterCaret.charAt(0) || '\u200b';
+    mirror.appendChild(marker);
+    document.body.appendChild(mirror);
+
+    const lineHeight = Number.parseFloat(computed.lineHeight) || (Number.parseFloat(computed.fontSize) * 1.4) || 20;
+    const top = rect.top + marker.offsetTop - textarea.scrollTop;
+    const bottom = top + lineHeight;
+
+    mirror.remove();
+
+    return {
+      top,
+      bottom,
+      left: rect.left,
+      right: rect.right,
+      width: rect.width,
+      height: lineHeight
+    };
   }
 
   function updateSuggestionDisplay() {
