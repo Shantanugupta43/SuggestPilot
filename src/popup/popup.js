@@ -48,7 +48,6 @@ let currentConfig = {
   enableTabAnalysis: true,
   enableAiChatMode: true,
 };
-let currentSuggestions = null;
 let extensionEnabled = true;
 
 /**
@@ -154,7 +153,6 @@ async function loadSuggestions() {
     });
 
     if (response.success) {
-      currentSuggestions = response;
       displaySuggestions(response);
     } else {
       showStatus(response.error || 'Failed to generate suggestions', 'error');
