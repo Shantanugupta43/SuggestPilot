@@ -1,26 +1,26 @@
 /* Popup Styles - CSS Variables */
 :root {
-  --primary: #4A90E2;
-  --primary-dark: #357ABD;
-  --secondary: #6C757D;
-  --success: #4CAF50;
-  --danger: #E74C3C;
-  --warning: #FFC107;
-  --bg: #FFFFFF;
-  --bg-secondary: #F8F9FA;
-  --border: #E0E0E0;
+  --primary: #4a90e2;
+  --primary-dark: #357abd;
+  --secondary: #6c757d;
+  --success: #4caf50;
+  --danger: #e74c3c;
+  --warning: #ffc107;
+  --bg: #ffffff;
+  --bg-secondary: #f8f9fa;
+  --border: #e0e0e0;
   --text: #212529;
-  --text-secondary: #6C757D;
+  --text-secondary: #6c757d;
   --shadow: rgba(0, 0, 0, 0.1);
 }
 
 body.dark {
-  --primary: #4A90E2;
-  --primary-dark: #357ABD;
-  --secondary: #6C757D;
-  --success: #4CAF50;
-  --danger: #E74C3C;
-  --warning: #FFC107;
+  --primary: #4a90e2;
+  --primary-dark: #357abd;
+  --secondary: #6c757d;
+  --success: #4caf50;
+  --danger: #e74c3c;
+  --warning: #ffc107;
   --bg: #1a1b1e;
   --bg-secondary: #25262b;
   --border: #2e2f34;
@@ -37,7 +37,9 @@ body.dark {
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu,
+    Cantarell, sans-serif;
   font-size: 14px;
   line-height: 1.5;
   color: var(--text);
@@ -308,7 +310,7 @@ body.dark .btn-secondary:hover {
 }
 
 .btn-danger:hover {
-  background: #C0392B;
+  background: #c0392b;
 }
 
 .icon-btn {
@@ -376,8 +378,8 @@ body.dark .btn-secondary:hover {
   margin-bottom: 6px;
 }
 
-.form-group input[type="text"],
-.form-group input[type="password"],
+.form-group input[type='text'],
+.form-group input[type='password'],
 .form-group select {
   width: 100%;
   padding: 8px 12px;
@@ -424,7 +426,7 @@ body.dark .btn-secondary:hover {
   font-weight: 500;
 }
 
-.checkbox-label input[type="checkbox"] {
+.checkbox-label input[type='checkbox'] {
   width: 18px;
   height: 18px;
   cursor: pointer;
@@ -520,7 +522,7 @@ body.dark .connection-status.error {
 
 .toggle-slider:before {
   position: absolute;
-  content: "";
+  content: '';
   height: 18px;
   width: 18px;
   left: 3px;

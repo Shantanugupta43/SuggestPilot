@@ -13,7 +13,7 @@ class ConfigManager {
 
     try {
       const stored = await chrome.storage.local.get(['groqApiKey', 'config']);
-      
+
       this.config = {
         groqApiKey: stored.groqApiKey || null,
         model: stored.config?.model || 'llama-3.1-8b-instant',
@@ -24,8 +24,18 @@ class ConfigManager {
         enableAiChatMode: stored.config?.enableAiChatMode ?? true,
         debugMode: stored.config?.debugMode || false,
         blockedSensitiveFields: stored.config?.blockedSensitiveFields || [
-          'password', 'passwd', 'pwd', 'credit-card', 'creditcard', 'ssn', 'bank', 'pin', 'cvv', 'api-key', 'token'
-        ]
+          'password',
+          'passwd',
+          'pwd',
+          'credit-card',
+          'creditcard',
+          'ssn',
+          'bank',
+          'pin',
+          'cvv',
+          'api-key',
+          'token',
+        ],
       };
 
       this.initialized = true;
@@ -73,8 +83,10 @@ class ConfigManager {
   isSensitiveField(fieldName) {
     if (!fieldName) return false;
     const normalized = fieldName.toLowerCase().replace(/[_\s-]/g, '');
-    const blockedFields = this.config.blockedSensitiveFields.map(f => f.toLowerCase().replace(/[_\s-]/g, ''));
-    return blockedFields.some(blocked => normalized.includes(blocked));
+    const blockedFields = this.config.blockedSensitiveFields.map((f) =>
+      f.toLowerCase().replace(/[_\s-]/g, '')
+    );
+    return blockedFields.some((blocked) => normalized.includes(blocked));
   }
 
   async clear() {

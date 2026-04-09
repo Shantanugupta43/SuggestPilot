@@ -17,11 +17,17 @@ class GroqService {
       const apiKey = configManager.getApiKey();
 
       // ── Form-fill mode:
-      const skipAiTypes = new Set(['os', 'browser', 'linkedin_url', 'github_url', 'version']);
+      const skipAiTypes = new Set([
+        'os',
+        'browser',
+        'linkedin_url',
+        'github_url',
+        'version',
+      ]);
       const hasReadyCandidates =
         context.fieldMeta?.candidates?.length > 0 &&
         (skipAiTypes.has(context.fieldMeta.fieldType) ||
-          context.fieldMeta.candidates.every(c => c.confidence >= 0.9));
+          context.fieldMeta.candidates.every((c) => c.confidence >= 0.9));
 
       if (hasReadyCandidates) {
         return this._buildFormFillResponse(context.fieldMeta);
@@ -37,7 +43,10 @@ class GroqService {
         : this.getContextAwareSystemPrompt();
 
       console.log('Generating for:', context.active_input_text);
-      console.log('Session intent:', context.sessionIntent?.sessionSummary || 'none');
+      console.log(
+        'Session intent:',
+        context.sessionIntent?.sessionSummary || 'none'
+      );
       console.log('Form field:', context.fieldMeta?.fieldType || 'none');
 
       const result = await this.callWithRetry(apiKey, prompt, systemPrompt);
@@ -46,7 +55,11 @@ class GroqService {
         : result;
     } catch (error) {
       console.error('Groq API error:', error);
-      return { reason: 'Error generating suggestions', suggestions: [], error: error.message };
+      return {
+        reason: 'Error generating suggestions',
+        suggestions: [],
+        error: error.message,
+      };
     }
   }
 
@@ -54,15 +67,15 @@ class GroqService {
    * Build a form-fill response directly from local candidates (no API call needed)
    */
   _buildFormFillResponse(fieldMeta) {
-    const suggestions = fieldMeta.candidates.map(c => ({
+    const suggestions = fieldMeta.candidates.map((c) => ({
       text: c.value,
-      derivation: `Auto-filled from ${c.source}`
+      derivation: `Auto-filled from ${c.source}`,
     }));
 
     return {
       reason: `Smart fill for "${fieldMeta.fieldLabel}"`,
       suggestions,
-      isFormFill: true
+      isFormFill: true,
     };
   }
 
@@ -70,25 +83,25 @@ class GroqService {
     const response = await fetch(`${this.baseURL}/chat/completions`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
       },
       body: JSON.stringify({
         model: this.model,
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: prompt }
+          { role: 'user', content: prompt },
         ],
         temperature: 0.4,
         max_tokens: 200,
-        top_p: 0.9
-      })
+        top_p: 0.9,
+      }),
     });
 
     if (response.status === 429 && attempt === 0) {
       const retryAfter = parseFloat(response.headers.get('retry-after') || '2');
       console.warn(`Rate limited, retrying in ${retryAfter}s...`);
-      await new Promise(r => setTimeout(r, retryAfter * 1000));
+      await new Promise((r) => setTimeout(r, retryAfter * 1000));
       return this.callWithRetry(apiKey, prompt, systemPrompt, 1);
     }
 
@@ -127,7 +140,7 @@ class GroqService {
     if (context.active_tabs?.length > 0) {
       const tabs = context.active_tabs
         .slice(0, 2)
-        .map(t => `"${t.title.slice(0, 40)}"`)
+        .map((t) => `"${t.title.slice(0, 40)}"`)
         .join(', ');
       parts.push(`TABS:${tabs}`);
     }
@@ -136,7 +149,7 @@ class GroqService {
     if (context.recent_history?.length > 0) {
       const hist = context.recent_history
         .slice(0, 2)
-        .map(t => `"${t.title.slice(0, 40)}"`)
+        .map((t) => `"${t.title.slice(0, 40)}"`)
         .join(', ');
       parts.push(`HIST:${hist}`);
     }
@@ -154,13 +167,13 @@ class GroqService {
     const parts = [
       `FIELD_TYPE:${fieldType}`,
       `FIELD_LABEL:"${fieldLabel}"`,
-      `CURRENT_VALUE:"${currentValue}"`
+      `CURRENT_VALUE:"${currentValue}"`,
     ];
 
     // If we already have some tab-based candidates, pass them as hints
     if (context.fieldMeta?.candidates?.length > 0) {
       const hints = context.fieldMeta.candidates
-        .map(c => `"${c.value}" (from ${c.source})`)
+        .map((c) => `"${c.value}" (from ${c.source})`)
         .join(', ');
       parts.push(`KNOWN_VALUES:${hints}`);
     }
@@ -176,7 +189,7 @@ class GroqService {
     if (context.active_tabs?.length > 0) {
       const tabs = context.active_tabs
         .slice(0, 2)
-        .map(t => `"${t.title.slice(0, 40)}"`)
+        .map((t) => `"${t.title.slice(0, 40)}"`)
         .join(', ');
       parts.push(`TABS:${tabs}`);
     }
@@ -226,17 +239,20 @@ Format:
     try {
       const parsed = JSON.parse(cleaned);
       if (parsed && typeof parsed === 'object') {
-        if (Array.isArray(parsed.suggestions) && parsed.suggestions.length > 0) {
+        if (
+          Array.isArray(parsed.suggestions) &&
+          parsed.suggestions.length > 0
+        ) {
           const suggestions = this.validateSuggestions(parsed.suggestions);
-          const normalized = suggestions.map(s => ({
+          const normalized = suggestions.map((s) => ({
             text: s.text || s,
-            derivation: s.derivation || 'Based on context'
+            derivation: s.derivation || 'Based on context',
           }));
           const validated = this.validateSuggestionOrdering(normalized);
           if (validated.length > 0) {
             return {
               reason: parsed.reason || 'Based on your browsing context',
-              suggestions: validated
+              suggestions: validated,
             };
           }
         }
@@ -250,17 +266,20 @@ Format:
       try {
         const parsed = JSON.parse(jsonMatch[0]);
         if (parsed && typeof parsed === 'object') {
-          if (Array.isArray(parsed.suggestions) && parsed.suggestions.length > 0) {
+          if (
+            Array.isArray(parsed.suggestions) &&
+            parsed.suggestions.length > 0
+          ) {
             const suggestions = this.validateSuggestions(parsed.suggestions);
-            const normalized = suggestions.map(s => ({
+            const normalized = suggestions.map((s) => ({
               text: s.text || s,
-              derivation: s.derivation || 'Based on context'
+              derivation: s.derivation || 'Based on context',
             }));
             const validated = this.validateSuggestionOrdering(normalized);
             if (validated.length > 0) {
               return {
                 reason: parsed.reason || 'Based on your browsing context',
-                suggestions: validated
+                suggestions: validated,
               };
             }
           }
@@ -273,23 +292,30 @@ Format:
     console.error('AI did not return proper JSON format');
     return {
       reason: 'Could not parse AI response',
-      suggestions: []
+      suggestions: [],
     };
   }
 
   validateSuggestions(suggestions) {
     if (!Array.isArray(suggestions)) return [];
     return suggestions
-      .map(s => {
+      .map((s) => {
         if (typeof s === 'object' && s !== null) {
           const text = s.text || s.suggestion;
           const derivation = s.derivation || s.explanation || s.reason;
-          if (text) return { text: String(text).trim(), derivation: derivation ? String(derivation).trim() : 'Based on context' };
+          if (text)
+            return {
+              text: String(text).trim(),
+              derivation: derivation
+                ? String(derivation).trim()
+                : 'Based on context',
+            };
         }
-        if (typeof s === 'string') return { text: s.trim(), derivation: 'Based on context' };
+        if (typeof s === 'string')
+          return { text: s.trim(), derivation: 'Based on context' };
         return null;
       })
-      .filter(s => {
+      .filter((s) => {
         if (!s || !s.text) return false;
         const text = s.text;
         if (text.length < 3 || text.length > 200) return false;
@@ -302,7 +328,8 @@ Format:
   }
 
   validateSuggestionOrdering(suggestions) {
-    if (!Array.isArray(suggestions) || suggestions.length === 0) return suggestions;
+    if (!Array.isArray(suggestions) || suggestions.length === 0)
+      return suggestions;
     return suggestions.map((suggestion, index) => {
       let sourceLabel = ['Session', 'Context', 'Smart'][index] || 'Smart';
       const derivation = suggestion.derivation || '';
@@ -319,18 +346,18 @@ Format:
       const response = await fetch(`${this.baseURL}/chat/completions`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json'
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           model: this.model,
           messages: [
             { role: 'system', content: 'Respond with only: {"status": "ok"}' },
-            { role: 'user', content: 'test' }
+            { role: 'user', content: 'test' },
           ],
           max_tokens: 20,
-          temperature: 0
-        })
+          temperature: 0,
+        }),
       });
       return response.ok;
     } catch (error) {

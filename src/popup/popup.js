@@ -7,7 +7,7 @@
 const views = {
   notConfigured: document.getElementById('notConfiguredView'),
   main: document.getElementById('mainView'),
-  settings: document.getElementById('settingsView')
+  settings: document.getElementById('settingsView'),
 };
 
 // Elements
@@ -19,11 +19,11 @@ const elements = {
   emptyState: document.getElementById('emptyState'),
   suggestionsList: document.getElementById('suggestionsList'),
   refreshBtn: document.getElementById('refreshBtn'),
-  
+
   // Toggle
   extensionToggle: document.getElementById('extensionToggle'),
   toggleStatus: document.getElementById('toggleStatus'),
-  
+
   // Settings view
   settingsBtn: document.getElementById('settingsBtn'),
   backBtn: document.getElementById('backBtn'),
@@ -37,11 +37,17 @@ const elements = {
   enableTabAnalysis: document.getElementById('enableTabAnalysis'),
   enableAiChatMode: document.getElementById('enableAiChatMode'),
   saveSettingsBtn: document.getElementById('saveSettingsBtn'),
-  clearDataBtn: document.getElementById('clearDataBtn')
+  clearDataBtn: document.getElementById('clearDataBtn'),
 };
 
 // State
-let currentConfig = { isConfigured: false, model: "llama-3.1-8b-instant", enableHistoryTracking: true, enableTabAnalysis: true, enableAiChatMode: true };
+let currentConfig = {
+  isConfigured: false,
+  model: 'llama-3.1-8b-instant',
+  enableHistoryTracking: true,
+  enableTabAnalysis: true,
+  enableAiChatMode: true,
+};
 let currentSuggestions = null;
 let extensionEnabled = true;
 
@@ -76,10 +82,10 @@ async function initialize() {
  */
 async function loadConfig() {
   try {
-    const response = await chrome.runtime.sendMessage({ 
-      action: 'getConfig' 
+    const response = await chrome.runtime.sendMessage({
+      action: 'getConfig',
     });
-    
+
     if (response && response.success && response.config) {
       currentConfig = response.config;
       populateSettings();
@@ -109,7 +115,7 @@ async function loadExtensionState() {
  * Show specific view
  */
 function showView(viewName) {
-  Object.values(views).forEach(view => view.classList.add('hidden'));
+  Object.values(views).forEach((view) => view.classList.add('hidden'));
   views[viewName]?.classList.remove('hidden');
 }
 
@@ -120,11 +126,13 @@ function setupEventListeners() {
   // Navigation
   elements.settingsBtn.addEventListener('click', () => showView('settings'));
   elements.backBtn.addEventListener('click', () => showView('main'));
-  elements.goToSettingsBtn.addEventListener('click', () => showView('settings'));
-  
+  elements.goToSettingsBtn.addEventListener('click', () =>
+    showView('settings')
+  );
+
   // Extension Toggle
   elements.extensionToggle.addEventListener('change', toggleExtension);
-  
+
   // Actions
   elements.refreshBtn.addEventListener('click', loadSuggestions);
   elements.toggleApiKeyBtn.addEventListener('click', toggleApiKeyVisibility);
@@ -139,12 +147,12 @@ function setupEventListeners() {
 async function loadSuggestions() {
   try {
     showLoading();
-    
-    const response = await chrome.runtime.sendMessage({ 
+
+    const response = await chrome.runtime.sendMessage({
       action: 'generateSuggestions',
-      data: {}
+      data: {},
     });
-    
+
     if (response.success) {
       currentSuggestions = response;
       displaySuggestions(response);
@@ -164,10 +172,10 @@ async function loadSuggestions() {
  */
 function displaySuggestions(data) {
   const { reason, suggestions } = data;
-  
+
   elements.loadingState.classList.add('hidden');
   elements.emptyState.classList.add('hidden');
-  
+
   if (!suggestions || suggestions.length === 0) {
     showEmpty();
     if (reason) {
@@ -175,15 +183,15 @@ function displaySuggestions(data) {
     }
     return;
   }
-  
+
   elements.suggestionsList.classList.remove('hidden');
   elements.suggestionsList.innerHTML = '';
-  
+
   suggestions.forEach((suggestion, index) => {
     const card = createSuggestionCard(suggestion, index);
     elements.suggestionsList.appendChild(card);
   });
-  
+
   if (reason) {
     showStatus(reason, 'success');
   }
@@ -195,17 +203,18 @@ function displaySuggestions(data) {
 function createSuggestionCard(suggestion, index) {
   const card = document.createElement('div');
   card.className = 'suggestion-card';
-  
+
   // Handle both string and object formats
   const text = typeof suggestion === 'string' ? suggestion : suggestion.text;
-  const derivation = typeof suggestion === 'object' ? suggestion.derivation : null;
-  
+  const derivation =
+    typeof suggestion === 'object' ? suggestion.derivation : null;
+
   const textEl = document.createElement('div');
   textEl.className = 'suggestion-text';
   textEl.textContent = text;
-  
+
   card.appendChild(textEl);
-  
+
   // Add derivation explanation if available
   if (derivation) {
     const derivationEl = document.createElement('div');
@@ -213,10 +222,10 @@ function createSuggestionCard(suggestion, index) {
     derivationEl.innerHTML = `<strong>Why:</strong> ${derivation}`;
     card.appendChild(derivationEl);
   }
-  
+
   // Add click handler to insert suggestion
   card.addEventListener('click', () => insertSuggestion(text));
-  
+
   return card;
 }
 
@@ -225,13 +234,16 @@ function createSuggestionCard(suggestion, index) {
  */
 async function insertSuggestion(text) {
   try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    
+    const [tab] = await chrome.tabs.query({
+      active: true,
+      currentWindow: true,
+    });
+
     const response = await chrome.tabs.sendMessage(tab.id, {
       action: 'insertSuggestion',
-      data: { text }
+      data: { text },
     });
-    
+
     if (response.success) {
       showStatus('Suggestion inserted', 'success');
       setTimeout(() => window.close(), 1000);
@@ -269,7 +281,7 @@ function showDisabledState() {
   elements.loadingState.classList.add('hidden');
   elements.suggestionsList.classList.add('hidden');
   elements.emptyState.classList.remove('hidden');
-  
+
   const emptyState = elements.emptyState;
   emptyState.innerHTML = `
     <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -286,18 +298,23 @@ function showDisabledState() {
  */
 async function toggleExtension() {
   extensionEnabled = elements.extensionToggle.checked;
-  
+
   try {
     await chrome.storage.local.set({ extensionEnabled });
     updateToggleStatus();
-    
+
     // Notify content script
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    chrome.tabs.sendMessage(tab.id, {
-      action: 'toggleExtension',
-      data: { enabled: extensionEnabled }
-    }).catch(() => {});
-    
+    const [tab] = await chrome.tabs.query({
+      active: true,
+      currentWindow: true,
+    });
+    chrome.tabs
+      .sendMessage(tab.id, {
+        action: 'toggleExtension',
+        data: { enabled: extensionEnabled },
+      })
+      .catch(() => {});
+
     if (extensionEnabled) {
       showStatus('Extension enabled', 'success');
       await loadSuggestions();
@@ -313,44 +330,39 @@ async function toggleExtension() {
 
 /**
  * dark mode toggle
- *  */ 
+ *  */
 
 const sign = document.getElementById('text');
-const outer = document.getElementById("outerbox");
-const inner = document.getElementById("innerbox");
-const text =document.getElementById("darkmode")
+const outer = document.getElementById('outerbox');
+const inner = document.getElementById('innerbox');
+const text = document.getElementById('darkmode');
 
 function changeText() {
-  if (sign.textContent == "X") {
-    sign.textContent = "✔";
-    outer.classList.toggle("active");
-    inner.classList.toggle("active");
+  if (sign.textContent == 'X') {
+    sign.textContent = '✔';
+    outer.classList.toggle('active');
+    inner.classList.toggle('active');
     document.body.classList.add('dark');
-    text.classList.toggle("active");
-    
-
+    text.classList.toggle('active');
   } else {
-    sign.textContent = "X";
-    outer.classList.toggle("active");
-    inner.classList.toggle("active");
+    sign.textContent = 'X';
+    outer.classList.toggle('active');
+    inner.classList.toggle('active');
     document.body.classList.remove('dark');
-     text.classList.toggle("active");
+    text.classList.toggle('active');
   }
 }
 
 outer.addEventListener('click', changeText);
-
-
-
-
-
 
 /**
  * Update toggle status text
  */
 function updateToggleStatus() {
   elements.toggleStatus.textContent = extensionEnabled ? 'ON' : 'OFF';
-  elements.toggleStatus.style.color = extensionEnabled ? 'var(--success)' : 'var(--secondary)';
+  elements.toggleStatus.style.color = extensionEnabled
+    ? 'var(--success)'
+    : 'var(--secondary)';
 }
 
 /**
@@ -360,7 +372,7 @@ function showStatus(message, type = 'info') {
   elements.statusText.textContent = message;
   elements.statusBar.className = `status-bar ${type}`;
   elements.statusBar.classList.remove('hidden');
-  
+
   setTimeout(() => {
     elements.statusBar.classList.add('hidden');
   }, 5000);
@@ -371,9 +383,10 @@ function showStatus(message, type = 'info') {
  */
 function populateSettings() {
   if (!currentConfig) return;
-  
+
   elements.modelSelect.value = currentConfig.model || 'llama-3.1-8b-instant';
-  elements.enableHistoryTracking.checked = currentConfig.enableHistoryTracking ?? true;
+  elements.enableHistoryTracking.checked =
+    currentConfig.enableHistoryTracking ?? true;
   elements.enableTabAnalysis.checked = currentConfig.enableTabAnalysis ?? true;
   elements.enableAiChatMode.checked = currentConfig.enableAiChatMode ?? true;
 }
@@ -394,13 +407,13 @@ async function testConnection() {
     elements.testConnectionBtn.disabled = true;
     elements.testConnectionBtn.textContent = 'Testing...';
     elements.connectionStatus.classList.add('hidden');
-    
-    const response = await chrome.runtime.sendMessage({ 
-      action: 'testConnection' 
+
+    const response = await chrome.runtime.sendMessage({
+      action: 'testConnection',
     });
-    
+
     elements.connectionStatus.classList.remove('hidden');
-    
+
     if (response.success) {
       elements.connectionStatus.textContent = '✔ Connection successful';
       elements.connectionStatus.className = 'connection-status success';
@@ -410,7 +423,8 @@ async function testConnection() {
     }
   } catch (error) {
     elements.connectionStatus.classList.remove('hidden');
-    elements.connectionStatus.textContent = '✗ Connection failed: ' + error.message;
+    elements.connectionStatus.textContent =
+      '✗ Connection failed: ' + error.message;
     elements.connectionStatus.className = 'connection-status error';
   } finally {
     elements.testConnectionBtn.disabled = false;
@@ -425,17 +439,17 @@ async function saveSettings() {
   try {
     elements.saveSettingsBtn.disabled = true;
     elements.saveSettingsBtn.textContent = 'Saving...';
-    
+
     // Save API key if provided
     const apiKey = elements.apiKeyInput.value.trim();
     if (apiKey) {
       await chrome.runtime.sendMessage({
         action: 'setApiKey',
-        data: { apiKey }
+        data: { apiKey },
       });
       elements.apiKeyInput.value = '';
     }
-    
+
     // Save other settings
     await chrome.runtime.sendMessage({
       action: 'updateConfig',
@@ -444,14 +458,14 @@ async function saveSettings() {
           model: elements.modelSelect.value,
           enableHistoryTracking: elements.enableHistoryTracking.checked,
           enableTabAnalysis: elements.enableTabAnalysis.checked,
-          enableAiChatMode: elements.enableAiChatMode.checked
-        }
-      }
+          enableAiChatMode: elements.enableAiChatMode.checked,
+        },
+      },
     });
-    
+
     showStatus('Settings saved successfully', 'success');
     await loadConfig();
-    
+
     if (currentConfig.isConfigured) {
       setTimeout(() => showView('main'), 1000);
     }
@@ -468,15 +482,19 @@ async function saveSettings() {
  * Clear all data
  */
 async function clearData() {
-  if (!confirm('Are you sure you want to clear all data? This will remove your API key and settings.')) {
+  if (
+    !confirm(
+      'Are you sure you want to clear all data? This will remove your API key and settings.'
+    )
+  ) {
     return;
   }
-  
+
   try {
-    await chrome.runtime.sendMessage({ 
-      action: 'clearConfig' 
+    await chrome.runtime.sendMessage({
+      action: 'clearConfig',
     });
-    
+
     showStatus('All data cleared', 'success');
     await loadConfig();
     showView('notConfigured');
@@ -484,7 +502,7 @@ async function clearData() {
     console.error('Failed to clear data:', error);
     showStatus('Failed to clear data', 'error');
   }
-} 
+}
 
 // Initialize on load
 document.addEventListener('DOMContentLoaded', initialize);
