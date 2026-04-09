@@ -200,7 +200,7 @@ function displaySuggestions(data) {
 /**
  * Create suggestion card
  */
-function createSuggestionCard(suggestion, index) {
+function createSuggestionCard(suggestion) {
   const card = document.createElement('div');
   card.className = 'suggestion-card';
 

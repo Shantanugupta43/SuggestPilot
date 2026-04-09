@@ -396,7 +396,7 @@ class FormDetector {
 
   _extractCompanyFromLinkedIn(title) {
     if (!title) return null;
-    const match = title.match(/at\s+([^|@\-]+)/i);
+    const match = title.match(/at\s+([^|@-]+)/i);
     if (match)
       return match[1]
         .trim()

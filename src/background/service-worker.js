@@ -31,7 +31,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   return true;
 });
 
-async function handleMessage(request, sender) {
+async function handleMessage(request) {
   const { action, data } = request;
 
   switch (action) {
@@ -61,10 +61,11 @@ async function handleMessage(request, sender) {
       await configManager.update(data.updates);
       return { success: true };
 
-    case 'testConnection':
+    case 'testConnection': { 
       await configManager.initialize();
       const isConnected = await groqService.testConnection();
       return { success: isConnected };
+    }
 
     case 'clearConfig':
       await configManager.clear();

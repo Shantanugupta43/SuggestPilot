@@ -319,7 +319,7 @@ Format:
         if (!s || !s.text) return false;
         const text = s.text;
         if (text.length < 3 || text.length > 200) return false;
-        if (/^[{}\[\]"'`]+$/.test(text)) return false;
+        if (/^[{}[\]"'`]+$/.test(text)) return false;
         if (text.toLowerCase().includes('reason:')) return false;
         if (text.toLowerCase().includes('suggestions:')) return false;
         return true;
