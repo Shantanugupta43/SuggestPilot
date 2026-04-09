@@ -15,15 +15,15 @@ class RateLimiter {
   checkLimit() {
     const maxRequests = 10; // Default, can be configured
     const now = Date.now();
-    
+
     // Remove old requests outside the window
-    this.requests = this.requests.filter(time => now - time < this.windowMs);
-    
+    this.requests = this.requests.filter((time) => now - time < this.windowMs);
+
     // Check if under limit
     if (this.requests.length >= maxRequests) {
       return false;
     }
-    
+
     // Add current request
     this.requests.push(now);
     return true;
@@ -35,7 +35,7 @@ class RateLimiter {
   getRemainingRequests() {
     const maxRequests = 10;
     const now = Date.now();
-    this.requests = this.requests.filter(time => now - time < this.windowMs);
+    this.requests = this.requests.filter((time) => now - time < this.windowMs);
     return Math.max(0, maxRequests - this.requests.length);
   }
 
@@ -44,11 +44,11 @@ class RateLimiter {
    */
   getTimeUntilReset() {
     if (this.requests.length === 0) return 0;
-    
+
     const oldestRequest = Math.min(...this.requests);
     const resetTime = oldestRequest + this.windowMs;
     const now = Date.now();
-    
+
     return Math.max(0, resetTime - now);
   }
 

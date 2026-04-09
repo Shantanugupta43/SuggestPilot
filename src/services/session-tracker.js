@@ -41,10 +41,10 @@ class SessionTracker {
 
       session.queries.push({
         text,
-        suggestions: (suggestions || []).slice(0, 3).map(s =>
-          typeof s === 'string' ? s : (s.text || '')
-        ),
-        timestamp: Date.now()
+        suggestions: (suggestions || [])
+          .slice(0, 3)
+          .map((s) => (typeof s === 'string' ? s : s.text || '')),
+        timestamp: Date.now(),
       });
 
       // Keep rolling window
@@ -72,7 +72,7 @@ class SessionTracker {
       const session = await this._loadSession();
       return {
         sessionSummary: session.sessionSummary || '',
-        recentThread: session.recentThread || ''
+        recentThread: session.recentThread || '',
       };
     } catch (error) {
       console.error('SessionTracker.getIntentContext error:', error);
@@ -117,7 +117,7 @@ class SessionTracker {
         sessionSummary: session.sessionSummary || '',
         recentThread: session.recentThread || '',
         startedAt: session.startedAt,
-        updatedAt: session.updatedAt || session.startedAt
+        updatedAt: session.updatedAt || session.startedAt,
       };
     } catch (error) {
       return this._freshSession();
@@ -134,7 +134,7 @@ class SessionTracker {
       sessionSummary: '',
       recentThread: '',
       startedAt: Date.now(),
-      updatedAt: Date.now()
+      updatedAt: Date.now(),
     };
   }
 
@@ -146,7 +146,7 @@ class SessionTracker {
   _buildRecentThread(queries) {
     return queries
       .slice(-5)
-      .map(q => q.text.slice(0, 60))
+      .map((q) => q.text.slice(0, 60))
       .join(' → ');
   }
 
@@ -160,16 +160,58 @@ class SessionTracker {
 
     // Collect all words, strip noise, count frequency
     const stopWords = new Set([
-      'the', 'a', 'an', 'is', 'in', 'on', 'at', 'to', 'for', 'of', 'and',
-      'or', 'how', 'what', 'why', 'when', 'where', 'do', 'does', 'can',
-      'i', 'my', 'me', 'with', 'vs', 'vs.', 'between', 'difference',
-      'best', 'good', 'new', 'using', 'use', 'get', 'will', 'it', 'this',
-      'that', 'from', 'about', 'into', 'are', 'be', 'not', 'no', 'without'
+      'the',
+      'a',
+      'an',
+      'is',
+      'in',
+      'on',
+      'at',
+      'to',
+      'for',
+      'of',
+      'and',
+      'or',
+      'how',
+      'what',
+      'why',
+      'when',
+      'where',
+      'do',
+      'does',
+      'can',
+      'i',
+      'my',
+      'me',
+      'with',
+      'vs',
+      'vs.',
+      'between',
+      'difference',
+      'best',
+      'good',
+      'new',
+      'using',
+      'use',
+      'get',
+      'will',
+      'it',
+      'this',
+      'that',
+      'from',
+      'about',
+      'into',
+      'are',
+      'be',
+      'not',
+      'no',
+      'without',
     ]);
 
     const freq = {};
     for (const q of queries) {
-      const words = q.text.toLowerCase().match(/\b[a-z][a-z0-9+#.]{1,20}\b/g) || [];
+      const words =
+        q.text.toLowerCase().match(/\b[a-z][a-z0-9+#.]{1,20}\b/g) || [];
       for (const word of words) {
         if (!stopWords.has(word)) {
           freq[word] = (freq[word] || 0) + 1;

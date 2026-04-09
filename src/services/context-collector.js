@@ -16,7 +16,7 @@ class ContextCollector {
       top_visited_titles: await this.getTopVisitedTitles(),
       recent_ai_tabs: await this.getRecentAITabs(),
       past_similar_searches: await this.getPastSimilarSearches(),
-      page_type: await this.detectPageType()
+      page_type: await this.detectPageType(),
     };
 
     return context;
@@ -27,19 +27,24 @@ class ContextCollector {
    */
   async getCurrentPageContext() {
     try {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      
-      const pageInfo = await chrome.tabs.sendMessage(tab.id, { 
-        action: 'getPageContext' 
-      }).catch(() => ({
-        title: tab.title || '',
-        headings: []
-      }));
+      const [tab] = await chrome.tabs.query({
+        active: true,
+        currentWindow: true,
+      });
+
+      const pageInfo = await chrome.tabs
+        .sendMessage(tab.id, {
+          action: 'getPageContext',
+        })
+        .catch(() => ({
+          title: tab.title || '',
+          headings: [],
+        }));
 
       return {
         title: pageInfo.title || tab.title || '',
         url: tab.url || '',
-        headings: (pageInfo.headings || []).slice(0, 3) // Only top 3 headings
+        headings: (pageInfo.headings || []).slice(0, 3), // Only top 3 headings
         // Removed summary and mainContent to save tokens
       };
     } catch (error) {
@@ -55,38 +60,53 @@ class ContextCollector {
   async getActiveTabsContext() {
     try {
       const tabs = await chrome.tabs.query({ currentWindow: true });
-      const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      
+      const [currentTab] = await chrome.tabs.query({
+        active: true,
+        currentWindow: true,
+      });
+
       console.log('🔍 Total tabs in window:', tabs.length);
       console.log('📍 Current active tab:', currentTab?.title);
-      
+
       const sensitiveDomains = [
-        'bank', 'login', 'signin', 'auth', 'payment',
-        'checkout', 'account', 'admin', 'dashboard'
+        'bank',
+        'login',
+        'signin',
+        'auth',
+        'payment',
+        'checkout',
+        'account',
+        'admin',
+        'dashboard',
       ];
 
       const activeTabs = tabs
-        .filter(tab => {
+        .filter((tab) => {
           // EXCLUDE the current active tab
           if (tab.id === currentTab?.id) {
             console.log('⏭️ Skipping current active tab:', tab.title);
             return false;
           }
-          
+
           const url = tab.url?.toLowerCase() || '';
-          const isFiltered = sensitiveDomains.some(domain => url.includes(domain));
+          const isFiltered = sensitiveDomains.some((domain) =>
+            url.includes(domain)
+          );
           if (isFiltered) {
             console.log('🚫 Filtered sensitive tab:', tab.title);
           }
           return !isFiltered;
         })
         .slice(0, 5) // Get top 5 OTHER tabs
-        .map(tab => ({
+        .map((tab) => ({
           title: tab.title || '',
-          url: tab.url || ''
+          url: tab.url || '',
         }));
 
-      console.log('Other tabs collected (excluding current):', activeTabs.length);
+      console.log(
+        'Other tabs collected (excluding current):',
+        activeTabs.length
+      );
       activeTabs.forEach((tab, i) => {
         console.log(`  ${i + 1}. "${tab.title}"`);
       });
@@ -103,11 +123,16 @@ class ContextCollector {
    */
   async getActiveInputText() {
     try {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      
-      const result = await chrome.tabs.sendMessage(tab.id, { 
-        action: 'getActiveInput' 
-      }).catch(() => ({ text: '' }));
+      const [tab] = await chrome.tabs.query({
+        active: true,
+        currentWindow: true,
+      });
+
+      const result = await chrome.tabs
+        .sendMessage(tab.id, {
+          action: 'getActiveInput',
+        })
+        .catch(() => ({ text: '' }));
 
       return result.text || '';
     } catch (error) {
@@ -121,28 +146,30 @@ class ContextCollector {
    */
   async getRecentHistory() {
     try {
-      const twoHoursAgo = Date.now() - (2 * 60 * 60 * 1000);
+      const twoHoursAgo = Date.now() - 2 * 60 * 60 * 1000;
       const history = await chrome.history.search({
         text: '',
         startTime: twoHoursAgo,
-        maxResults: 15 // Reduced for token efficiency
+        maxResults: 15, // Reduced for token efficiency
       });
 
       const filtered = history
-        .filter(item => {
+        .filter((item) => {
           const url = item.url?.toLowerCase() || '';
           const title = item.title?.toLowerCase() || '';
-          return !url.includes('chrome://') && 
-                 !url.includes('chrome-extension://') &&
-                 title && 
-                 title !== 'new tab' &&
-                 title.length > 3;
+          return (
+            !url.includes('chrome://') &&
+            !url.includes('chrome-extension://') &&
+            title &&
+            title !== 'new tab' &&
+            title.length > 3
+          );
         })
-        .map(item => ({
+        .map((item) => ({
           title: item.title || '',
           url: item.url || '',
           visitCount: item.visitCount || 0,
-          lastVisitTime: item.lastVisitTime || 0
+          lastVisitTime: item.lastVisitTime || 0,
         }));
 
       return filtered;
@@ -157,30 +184,32 @@ class ContextCollector {
    */
   async getTopVisitedTitles() {
     try {
-      const oneWeekAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
+      const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
       const history = await chrome.history.search({
         text: '',
         startTime: oneWeekAgo,
-        maxResults: 50 // Reduced sample size
+        maxResults: 50, // Reduced sample size
       });
 
       const topTitles = history
-        .filter(item => {
+        .filter((item) => {
           const url = item.url?.toLowerCase() || '';
           const title = item.title?.toLowerCase() || '';
-          return !url.includes('chrome://') && 
-                 !url.includes('chrome-extension://') &&
-                 title && 
-                 title !== 'new tab' &&
-                 title.length > 3 &&
-                 item.visitCount > 1;
+          return (
+            !url.includes('chrome://') &&
+            !url.includes('chrome-extension://') &&
+            title &&
+            title !== 'new tab' &&
+            title.length > 3 &&
+            item.visitCount > 1
+          );
         })
         .sort((a, b) => b.visitCount - a.visitCount)
         .slice(0, 5) // Reduced to top 5
-        .map(item => ({
+        .map((item) => ({
           title: item.title || '',
           url: item.url || '',
-          visitCount: item.visitCount || 0
+          visitCount: item.visitCount || 0,
         }));
 
       return topTitles;
@@ -196,28 +225,33 @@ class ContextCollector {
   async getRecentAITabs() {
     try {
       const aiDomains = [
-        'chat.openai.com', 'claude.ai', 'bard.google.com',
-        'copilot.microsoft.com', 'perplexity.ai', 'gemini.google.com',
-        'poe.com', 'huggingface.co/chat'
+        'chat.openai.com',
+        'claude.ai',
+        'bard.google.com',
+        'copilot.microsoft.com',
+        'perplexity.ai',
+        'gemini.google.com',
+        'poe.com',
+        'huggingface.co/chat',
       ];
 
-      const oneHourAgo = Date.now() - (60 * 60 * 1000); // Reduced to 1 hour
+      const oneHourAgo = Date.now() - 60 * 60 * 1000; // Reduced to 1 hour
       const history = await chrome.history.search({
         text: '',
         startTime: oneHourAgo,
-        maxResults: 20 // Reduced sample
+        maxResults: 20, // Reduced sample
       });
 
       const aiTabs = history
-        .filter(item => {
+        .filter((item) => {
           const url = item.url?.toLowerCase() || '';
-          return aiDomains.some(domain => url.includes(domain));
+          return aiDomains.some((domain) => url.includes(domain));
         })
         .slice(0, 3) // Reduced to 3 for token efficiency
-        .map(item => ({
+        .map((item) => ({
           title: item.title || '',
           url: item.url || '',
-          platform: this.detectAIPlatform(item.url || '')
+          platform: this.detectAIPlatform(item.url || ''),
         }));
 
       return aiTabs;
@@ -234,7 +268,11 @@ class ContextCollector {
     const urlLower = url.toLowerCase();
     if (urlLower.includes('chat.openai.com')) return 'ChatGPT';
     if (urlLower.includes('claude.ai')) return 'Claude';
-    if (urlLower.includes('bard.google.com') || urlLower.includes('gemini.google.com')) return 'Gemini';
+    if (
+      urlLower.includes('bard.google.com') ||
+      urlLower.includes('gemini.google.com')
+    )
+      return 'Gemini';
     if (urlLower.includes('copilot.microsoft.com')) return 'Copilot';
     if (urlLower.includes('perplexity.ai')) return 'Perplexity';
     if (urlLower.includes('poe.com')) return 'Poe';
@@ -259,16 +297,22 @@ class ContextCollector {
    */
   async detectPageType() {
     try {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      const [tab] = await chrome.tabs.query({
+        active: true,
+        currentWindow: true,
+      });
       const url = tab.url?.toLowerCase() || '';
       const title = tab.title?.toLowerCase() || '';
 
       const aiChatDomains = [
-        'chat.openai.com', 'claude.ai', 'bard.google.com',
-        'copilot.microsoft.com', 'perplexity.ai'
+        'chat.openai.com',
+        'claude.ai',
+        'bard.google.com',
+        'copilot.microsoft.com',
+        'perplexity.ai',
       ];
 
-      if (aiChatDomains.some(domain => url.includes(domain))) {
+      if (aiChatDomains.some((domain) => url.includes(domain))) {
         return 'ai_chat';
       }
 
@@ -280,7 +324,10 @@ class ContextCollector {
         return 'documentation';
       }
 
-      if (url.includes('google.com/search') || url.includes('bing.com/search')) {
+      if (
+        url.includes('google.com/search') ||
+        url.includes('bing.com/search')
+      ) {
         return 'search';
       }
 
@@ -296,17 +343,26 @@ class ContextCollector {
    */
   isSensitiveInput(text, fieldName) {
     const sensitivePatterns = [
-      /password/i, /passwd/i, /pwd/i,
-      /credit[_\s-]?card/i, /cc[_\s-]?number/i,
-      /ssn/i, /social[_\s-]?security/i,
-      /bank[_\s-]?account/i, /account[_\s-]?number/i,
-      /cvv/i, /cvc/i, /pin/i,
-      /api[_\s-]?key/i, /token/i,
-      /email/i, /e-mail/i
+      /password/i,
+      /passwd/i,
+      /pwd/i,
+      /credit[_\s-]?card/i,
+      /cc[_\s-]?number/i,
+      /ssn/i,
+      /social[_\s-]?security/i,
+      /bank[_\s-]?account/i,
+      /account[_\s-]?number/i,
+      /cvv/i,
+      /cvc/i,
+      /pin/i,
+      /api[_\s-]?key/i,
+      /token/i,
+      /email/i,
+      /e-mail/i,
     ];
 
     const combinedText = `${text} ${fieldName}`.toLowerCase();
-    return sensitivePatterns.some(pattern => pattern.test(combinedText));
+    return sensitivePatterns.some((pattern) => pattern.test(combinedText));
   }
 }
 
