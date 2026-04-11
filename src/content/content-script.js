@@ -42,7 +42,8 @@
     website:      ['website', 'portfolio', 'personal_site', 'homepage', 'personal_url'],
     experience_years: ['years_of_exp', 'yearsofexp', 'experience_years', 'yoe', 'years_experience'],
     issue_subject:     ['subject', 'issue_title', 'issuetitle', 'ticket_title', 'tickettitle', 'summary'],
-    issue_description: ['description', 'details', 'body', 'explain', 'steps_to_reproduce', 'reproduce']
+    issue_description: ['description', 'details', 'body', 'explain', 'steps_to_reproduce', 'reproduce'],
+    country: ['country', 'country_code', 'nation', 'nationality', 'country_name'],
   };
 
   function classifyField(element) {
@@ -321,6 +322,20 @@
         meta.candidates.push(...optionCandidates);
         meta.isFormFill = true;
       }
+    }
+
+    if (fieldType === 'country') {
+      try {
+        const locale = navigator.language || '';          
+        const regionCode = locale.split('-')[1];          
+        if (regionCode) {
+          const countryName = new Intl.DisplayNames(['en'], { type: 'region' }).of(regionCode);
+          if (countryName) {
+            meta.candidates.push({ value: countryName, source: 'Your browser locale', confidence: 0.85 });
+            meta.isFormFill = true;
+          }
+        }
+      } catch (e) { /* unsupported */ }
     }
 
     // ── Tab-dependent types: mark isFormFill so service-worker uses
