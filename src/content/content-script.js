@@ -3,6 +3,11 @@
  * + Smart Form-Fill detection
  * + Session-aware suggestion labels
  */
+// Sites where the extension should stay completely silent
+const BLOCKED_DOMAINS = [
+  'linkedin.com'
+];
+let cachedBlockedSites = [];
 
 (function() {
   'use strict';
@@ -16,10 +21,8 @@
   let isAddressBar = false;
   let extensionEnabled = true;
 
-  // Sites where the extension should stay completely silent
-  const BLOCKED_DOMAINS = [
-    'linkedin.com'
-  ];
+ 
+  
 
   // ── Form-fill detector (inline, no import needed in content scripts) ────────
   const FORM_FIELD_PATTERNS = {
@@ -362,33 +365,38 @@
 
   // ── Overlay setup ──────────────────────────────────────────────────────────
 
-  function isBlockedDomain() {
-    const host = window.location.hostname.toLowerCase();
-    return BLOCKED_DOMAINS.some(domain => host.includes(domain));
-  }
+  async function isBlockedDomain() {
+  const host = window.location.hostname.toLowerCase();
 
-  async function loadExtensionState() {
+  // Load blocked sites only once
+  if (cachedBlockedSites.length === 0) {
     try {
-      const stored = await chrome.storage.local.get('extensionEnabled');
-      extensionEnabled = stored.extensionEnabled ?? true;
-    } catch (error) {
-      console.error('Failed to load extension state:', error);
-      extensionEnabled = true;
+      const stored = await chrome.storage.local.get("blockedSites");
+      cachedBlockedSites = stored.blockedSites || [];
+    } catch (err) {
+      console.warn("Failed to load blockedSites", err);
     }
   }
+
+  // Check both default blocked domains and user-configured blocked sites
+  return (
+    BLOCKED_DOMAINS.some(domain => host === domain || host.endsWith("." + domain)) ||
+    cachedBlockedSites.some(domain => host === domain || host.endsWith("." + domain))
+  );
+}
 
   async function initialize() {
-    if (isBlockedDomain()) {
-      console.log('AI Context Assistant: disabled on', window.location.hostname);
-      return;
-    }
-    await loadExtensionState();
-    setupInputTracking();
-    setupMessageListener();
-    createSuggestionOverlay();
-    setupAddressBarDetection();
-    console.log('AI Context Assistant - Session+FormFill mode active');
+  if (await isBlockedDomain()) {
+    console.log("SuggestPilot disabled on", window.location.hostname);
+    return;
   }
+
+  await loadExtensionState();
+  setupInputTracking();
+  setupMessageListener();
+  createSuggestionOverlay();
+  setupAddressBarDetection();
+}
 
   function createSuggestionOverlay() {
     suggestionOverlay = document.createElement('div');
