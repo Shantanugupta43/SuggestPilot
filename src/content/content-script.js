@@ -492,35 +492,44 @@ let cachedBlockedSites = [];
   }
 
   function setupInputTracking() {
-    document.addEventListener('focusin', (e) => {
-      const target = e.target;
-      if (isInputElement(target)) {
-        currentInput = target;
-        lastInputValue = getInputValue(target);
-        isAddressBar = isGoogleSearchInput(target);
+  document.addEventListener('focusin', (e) => {
+    const target = e.target;
 
-        if (isSensitiveField(target)) {
-          currentInput = null;
-          hideSuggestion();
-          return;
-        }
-        attachInputListeners(target);
+    // Prevent suggestions on password fields
+    if (target.type === 'password') {
+      return;
+    }
+
+    if (isInputElement(target)) {
+      currentInput = target;
+      lastInputValue = getInputValue(target);
+      isAddressBar = isGoogleSearchInput(target);
+
+      if (isSensitiveField(target)) {
+        currentInput = null;
+        hideSuggestion();
+        return;
       }
-    }, true);
 
-    document.addEventListener('focusout', (e) => {
-      if (currentInput === e.target) {
-        setTimeout(() => {
-          hideSuggestion();
-          currentInput = null;
-          currentSuggestions = [];
-          isAddressBar = false;
-        }, 200);
-      }
-    }, true);
+      attachInputListeners(target);
+    }
+  }, true);
 
-    if (window.location.href.includes('claude.ai')) setupClaudeInputDetection();
+  document.addEventListener('focusout', (e) => {
+    if (currentInput === e.target) {
+      setTimeout(() => {
+        hideSuggestion();
+        currentInput = null;
+        currentSuggestions = [];
+        isAddressBar = false;
+      }, 200);
+    }
+  }, true);
+
+  if (window.location.href.includes('claude.ai')) {
+    setupClaudeInputDetection();
   }
+}
 
   function setupClaudeInputDetection() {
     const selectors = ['.ProseMirror', 'div[contenteditable="true"]', 'div[role="textbox"]'];
