@@ -123,18 +123,24 @@ class FormDetector {
     if (/(subject|issue[_\s]?title|ticket[_\s]?title|summary)/.test(combined)) return 'issue_subject';
     if (/(description|details|body|message|explain|steps)/.test(combined)) return 'issue_description';
 
-    // ── Location ────────────────────────────────────────────────────────────
-    if (/(city|town|municipality)/.test(combined)) return 'city';
-    if (/(country)/.test(combined)) return 'country';
-    if (/(zip|postal|postcode)/.test(combined)) return 'zip';
-    if (/(^|\W)(timezone|time[_\s-]?zone|\btz\b)|_tz$/.test(combined)) return 'timezone';
+    // ── Location ────────────────────────────────────────────
+if (/(city|town|municipality)/.test(combined)) return 'city';
+if (/(country)/.test(combined)) return 'country';
+if (/(zip|postal|postcode)/.test(combined)) return 'zip';
+if (/(^|\W)(timezone|time[_\s-]?zone|\btz\b)|_tz$/.test(combined)) return 'timezone';
 
-    // ── Search / generic ────────────────────────────────────────────────────
-    if (meta.type === 'search' || /(search|query|q)/.test(combined)) return 'search';
+// ── Additional profile fields (added contribution) ──────
+if (/(state|province|region)/.test(combined)) return 'state';
+if (/(nationality|citizenship)/.test(combined)) return 'nationality';
+if (/(portfolio[_\s-]?url|personal[_\s-]?website)/.test(combined)) return 'portfolio';
+if (/(stack[_\s-]?overflow)/.test(combined)) return 'stackoverflow_url';
+if (/(twitter|x[_\s-]?profile)/.test(combined)) return 'twitter_url';
 
-    return null; // unrecognised — fall back to normal suggestions
-  }
+// ── Search / generic ─────────────────────────────────────
+if (meta.type === 'search' || /(search|query|q)/.test(combined)) return 'search';
 
+return null; // unrecognised — fall back to normal suggestions
+}
   /**
    * Build fill candidates for a given field type, drawing from available signals.
    */
@@ -272,16 +278,23 @@ class FormDetector {
 
   // ─── Extraction helpers ────────────────────────────────────────────────────
 
-  _extractJobTitleFromLinkedIn(title) {
-    if (!title) return null;
-    // LinkedIn page titles are often: "Name | Job Title at Company | LinkedIn"
-    const match = title.match(/\|\s*([^|@]+?)\s+at\s+/i);
-    if (match) return match[1].trim();
-    // Or: "Name - Job Title - LinkedIn"
-    const match2 = title.match(/-\s*([^-]+?)\s*-\s*LinkedIn/i);
-    if (match2) return match2[1].trim();
-    return null;
-  }
+ _extractJobTitleFromLinkedIn(title) {
+  if (!title) return null;
+
+  // Pattern: "Name | Job Title at Company | LinkedIn"
+  const match = title.match(/\|\s*([^|@]+?)\s+at\s+/i);
+  if (match) return match[1].trim();
+
+  // Pattern: "Name - Job Title - LinkedIn"
+  const match2 = title.match(/-\s*([^-]+?)\s*-\s*LinkedIn/i);
+  if (match2) return match2[1].trim();
+
+  // Pattern: "Job Title | Company | LinkedIn"
+  const match3 = title.match(/^([^|]+)\|\s*[^|]+\|\s*LinkedIn/i);
+  if (match3) return match3[1].trim();
+
+  return null;
+}
 
   _extractCompanyFromLinkedIn(title) {
     if (!title) return null;
