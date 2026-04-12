@@ -124,10 +124,12 @@ class FormDetector {
     if (/(description|details|body|message|explain|steps)/.test(combined)) return 'issue_description';
 
     // ── Location ────────────────────────────────────────────────────────────
-    if (/(city|town|municipality)/.test(combined)) return 'city';
-    if (/(country)/.test(combined)) return 'country';
-    if (/(zip|postal|postcode)/.test(combined)) return 'zip';
-    if (/(^|\W)(timezone|time[_\s-]?zone|\btz\b)|_tz$/.test(combined)) return 'timezone';
+    // ── Additional profile fields (added contribution) ──────────────────────
+if (/(state|province|region)/.test(combined)) return 'state';
+if (/(nationality|citizenship)/.test(combined)) return 'nationality';
+if (/(portfolio[_\s-]?url|personal[_\s-]?website)/.test(combined)) return 'portfolio';
+if (/(stack[_\s-]?overflow)/.test(combined)) return 'stackoverflow_url';
+if (/(twitter|x[_\s-]?profile)/.test(combined)) return 'twitter_url';
 
     // ── Search / generic ────────────────────────────────────────────────────
     if (meta.type === 'search' || /(search|query|q)/.test(combined)) return 'search';
