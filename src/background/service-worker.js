@@ -107,8 +107,8 @@ async function generateSuggestions(data) {
       sessionIntent: await sessionTracker.getIntentContext()
     };
 
-    if (mergedContext.active_input_text && data.fieldName) {
-      if (contextCollector.isSensitiveInput(mergedContext.active_input_text, data.fieldName)) {
+    if (data.fieldName) {
+      if (contextCollector.isSensitiveInput(data.fieldName)) {
         return { success: true, reason: 'Sensitive input detected', suggestions: [] };
       }
     }
