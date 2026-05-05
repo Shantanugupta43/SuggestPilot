@@ -294,7 +294,9 @@ class ContextCollector {
   /**
    * Check if input is sensitive
    */
-  isSensitiveInput(text, fieldName) {
+  isSensitiveInput(fieldName) {
+    if (!fieldName) return false;
+
     const sensitivePatterns = [
       /password/i, /passwd/i, /pwd/i,
       /credit[_\s-]?card/i, /cc[_\s-]?number/i,
@@ -305,8 +307,7 @@ class ContextCollector {
       /email/i, /e-mail/i
     ];
 
-    const combinedText = `${text} ${fieldName}`.toLowerCase();
-    return sensitivePatterns.some(pattern => pattern.test(combinedText));
+    return sensitivePatterns.some(pattern => pattern.test(fieldName.toLowerCase()));
   }
 }
 

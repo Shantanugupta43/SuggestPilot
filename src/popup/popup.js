@@ -318,24 +318,34 @@ async function toggleExtension() {
 const sign = document.getElementById('text');
 const outer = document.getElementById("outerbox");
 const inner = document.getElementById("innerbox");
-const text =document.getElementById("darkmode")
+const text = document.getElementById("darkmode");
 
-function changeText() {
-  if (sign.textContent == "X") {
+function applyDarkMode(enabled) {
+  if (enabled) {
     sign.textContent = "✔";
-    outer.classList.toggle("active");
-    inner.classList.toggle("active");
+    outer.classList.add("active");
+    inner.classList.add("active");
+    text.classList.add("active");
     document.body.classList.add('dark');
-    text.classList.toggle("active");
-    
-
   } else {
     sign.textContent = "X";
-    outer.classList.toggle("active");
-    inner.classList.toggle("active");
+    outer.classList.remove("active");
+    inner.classList.remove("active");
+    text.classList.remove("active");
     document.body.classList.remove('dark');
-     text.classList.toggle("active");
   }
+}
+
+// Restore persisted dark mode preference on popup open
+chrome.storage.local.get('darkMode', ({ darkMode }) => {
+  applyDarkMode(!!darkMode);
+});
+
+function changeText() {
+  const isDark = document.body.classList.contains('dark');
+  const next = !isDark;
+  applyDarkMode(next);
+  chrome.storage.local.set({ darkMode: next });
 }
 
 outer.addEventListener('click', changeText);
