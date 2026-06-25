@@ -146,6 +146,57 @@ describe('GroqService', () => {
       expect(result.suggestions).toEqual([]);
       expect(result.error).toBe('Network failure');
     });
+
+    it('uses social reply prompt for X posts and sets isSocialReply', async () => {
+      global.fetch.mockResolvedValueOnce(
+        makeApiResponse([
+          { text: 'Great point — totally agree with this take.', derivation: 'supportive' },
+          { text: 'Curious what made you think of this approach?', derivation: 'question' },
+          { text: 'This hits different 🔥', derivation: 'casual' }
+        ])
+      );
+
+      const context = {
+        active_input_text: 'I think',
+        page_type: 'social_x',
+        postContext: {
+          author: 'Alice',
+          handle: '@alice',
+          text: 'Shipping fast beats perfect planning every time.',
+          parentText: ''
+        }
+      };
+
+      const result = await service.generateSuggestions(context);
+
+      expect(fetch).toHaveBeenCalledTimes(1);
+      const body = JSON.parse(fetch.mock.calls[0][1].body);
+      expect(body.messages[0].content).toContain('Social reply assistant');
+      expect(body.messages[1].content).toContain('POST_TEXT:');
+      expect(body.messages[1].content).toContain('Shipping fast beats perfect planning');
+      expect(result.isSocialReply).toBe(true);
+      expect(result.suggestions[0].text.length).toBeLessThanOrEqual(280);
+    });
+  });
+
+  // ── buildSocialReplyPrompt ─────────────────────────────────────────────────
+
+  describe('buildSocialReplyPrompt()', () => {
+    it('includes post text and draft', () => {
+      const prompt = service.buildSocialReplyPrompt({
+        active_input_text: 'Well said',
+        postContext: {
+          author: 'Bob',
+          handle: '@bob',
+          text: 'AI will change how we build software.',
+          parentText: 'Original thread post'
+        }
+      });
+
+      expect(prompt).toContain('DRAFT:"Well said"');
+      expect(prompt).toContain('POST_TEXT:"AI will change how we build software."');
+      expect(prompt).toContain('PARENT_POST:"Original thread post"');
+    });
   });
 
   // ── callWithRetry ──────────────────────────────────────────────────────────

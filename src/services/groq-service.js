@@ -28,19 +28,32 @@ class GroqService {
       }
 
       // ── Form field detected but needs AI to generate/augment suggestions ───
-      const prompt = context.fieldMeta?.fieldType
-        ? this.buildFormFieldPrompt(context)
-        : this.buildContextAwarePrompt(context);
+      const isSocialReply =
+        context.page_type === 'social_x' && Boolean(context.postContext?.text);
 
-      const systemPrompt = context.fieldMeta?.fieldType
-        ? this.getFormFillSystemPrompt()
-        : this.getContextAwareSystemPrompt();
+      const prompt = isSocialReply
+        ? this.buildSocialReplyPrompt(context)
+        : context.fieldMeta?.fieldType
+          ? this.buildFormFieldPrompt(context)
+          : this.buildContextAwarePrompt(context);
+
+      const systemPrompt = isSocialReply
+        ? this.getSocialReplySystemPrompt()
+        : context.fieldMeta?.fieldType
+          ? this.getFormFillSystemPrompt()
+          : this.getContextAwareSystemPrompt();
 
       console.log('Generating for:', context.active_input_text);
       console.log('Session intent:', context.sessionIntent?.sessionSummary || 'none');
       console.log('Form field:', context.fieldMeta?.fieldType || 'none');
+      if (context.page_type === 'social_x') {
+        console.log('X post context:', context.postContext?.text?.slice(0, 80) || 'none');
+      }
 
       const result = await this.callWithRetry(apiKey, prompt, systemPrompt);
+      if (isSocialReply) {
+        return { ...this.validateSocialReplies(result), isSocialReply: true };
+      }
       return context.fieldMeta?.fieldType
         ? { ...result, isFormFill: true }
         : result;
@@ -184,6 +197,29 @@ class GroqService {
     return parts.join('\n');
   }
 
+  /**
+   * X/Twitter reply prompt — uses the post being replied to as primary context.
+   */
+  buildSocialReplyPrompt(context) {
+    const post = context.postContext || {};
+    const parts = [
+      `DRAFT:"${context.active_input_text || ''}"`,
+      `POST_AUTHOR:"${post.author || ''}"`,
+      `POST_HANDLE:"${post.handle || ''}"`,
+      `POST_TEXT:"${post.text || ''}"`
+    ];
+
+    if (post.parentText) {
+      parts.push(`PARENT_POST:"${post.parentText}"`);
+    }
+
+    if (context.sessionIntent?.sessionSummary) {
+      parts.push(`SESSION:${context.sessionIntent.sessionSummary}`);
+    }
+
+    return parts.join('\n');
+  }
+
   // ─── System prompts ────────────────────────────────────────────────────────
 
   getContextAwareSystemPrompt() {
@@ -213,6 +249,34 @@ Rules:
 
 Format:
 {"reason":"Smart form fill","suggestions":[{"text":"suggested value","derivation":"source of this suggestion"},{"text":"alternative value","derivation":"source"}]}`;
+  }
+
+  getSocialReplySystemPrompt() {
+    return `Social reply assistant for X/Twitter. Suggest 3 concise reply drafts that respond to POST_TEXT. The user may have started typing in DRAFT — complete or refine their thought.
+
+Rules:
+- Output ONLY valid JSON, no markdown
+- Each reply must be under 280 characters
+- suggestion[0]: supportive or agreeable tone
+- suggestion[1]: thoughtful question or constructive alternative view
+- suggestion[2]: casual, witty, or concise tone
+- Match the language of POST_TEXT (e.g. Chinese post → Chinese replies)
+- Reference specific points from POST_TEXT when possible
+- Never be offensive, spammy, or generic engagement-bait
+
+Format:
+{"reason":"brief","suggestions":[{"text":"reply draft","derivation":"tone/style"},{"text":"reply draft","derivation":"tone/style"},{"text":"reply draft","derivation":"tone/style"}]}`;
+  }
+
+  validateSocialReplies(result) {
+    if (!result?.suggestions?.length) return result;
+    const suggestions = result.suggestions
+      .map(s => ({
+        ...s,
+        text: (s.text || '').slice(0, 280)
+      }))
+      .filter(s => s.text && s.text.length >= 2);
+    return { ...result, suggestions: suggestions.slice(0, 3) };
   }
 
   // ─── Response parsing (unchanged from original) ────────────────────────────

@@ -41,7 +41,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["src/sidebar/sidebar.html"],
+      "resources": ["src/sidebar/sidebar.html", "src/services/x-context-extractor.js"],
       "matches": ["<all_urls>"]
     }
   ],
