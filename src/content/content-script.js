@@ -46,6 +46,41 @@
   let lastInputValue = '';
   let isAddressBar = false;
   let extensionEnabled = true;
+  let lastComposeRoot = null;
+  let suggestionGeneration = 0;
+
+  function resolveXComposeInput(element) {
+    if (!element || !isXHost(window.location.hostname)) return null;
+
+    const textarea = element.closest('[data-testid*="tweetTextarea"]') ||
+      (element.getAttribute('data-testid')?.includes('tweetTextarea') ? element : null);
+
+    if (textarea) {
+      return textarea.querySelector('[contenteditable="true"]') || textarea;
+    }
+
+    if (element.contentEditable === 'true' && element.closest('[role="dialog"], article')) {
+      return element;
+    }
+
+    return isXComposeInput(element) ? element : null;
+  }
+
+  function getComposeRoot(input) {
+    if (!input) return null;
+    return input.closest('[data-testid*="tweetTextarea"]') ||
+      input.closest('[role="dialog"]') ||
+      input;
+  }
+
+  function positionOverlay(input) {
+    const rect = input.getBoundingClientRect();
+    return {
+      top: isAddressBar ? rect.bottom + 14 : rect.bottom + 10,
+      left: rect.left,
+      width: Math.max(rect.width, 320)
+    };
+  }
 
   const BLOCKED_DOMAINS = [
     'linkedin.com'
@@ -420,29 +455,80 @@
     setupMessageListener();
     createSuggestionOverlay();
     setupAddressBarDetection();
-    if (isXHost(window.location.hostname)) setupXReplyDetection();
+    if (isXHost(window.location.hostname)) setupXComposeDelegation();
     console.log('AI Context Assistant - Session+FormFill+XReply mode active');
   }
 
-  function setupXReplyDetection() {
-    const attachXInputs = () => {
-      const selectors = [
-        '[data-testid="tweetTextarea_0"]',
-        '[data-testid*="tweetTextarea"]',
-        '[role="dialog"] [contenteditable="true"]',
-        'article [contenteditable="true"]'
-      ];
-      for (const selector of selectors) {
-        document.querySelectorAll(selector).forEach(input => {
-          if (!isInputElement(input) || isSensitiveField(input)) return;
-          if (!input.dataset.listenersAttached) attachInputListeners(input, { isXCompose: true });
-        });
+  function setupXComposeDelegation() {
+    const handleXFocus = (e) => {
+      const composeInput = resolveXComposeInput(e.target);
+      if (!composeInput || isSensitiveField(composeInput)) return;
+
+      const composeRoot = getComposeRoot(composeInput);
+      if (composeRoot !== lastComposeRoot) {
+        lastComposeRoot = composeRoot;
+        lastInputValue = '';
+        currentSuggestions = [];
+        hideSuggestion();
+        clearTimeout(debounceTimer);
+      }
+
+      currentInput = composeInput;
+      lastInputValue = getInputValue(composeInput);
+      clearTimeout(debounceTimer);
+      showSuggestionLoading(composeInput);
+      debounceTimer = setTimeout(() => {
+        generateSuggestions(composeInput, getInputValue(composeInput));
+      }, 500);
+    };
+
+    const handleXInput = (e) => {
+      const composeInput = resolveXComposeInput(e.target);
+      if (!composeInput || isSensitiveField(composeInput)) return;
+
+      currentInput = composeInput;
+      const value = getInputValue(composeInput);
+      if (value !== lastInputValue && value.trim().length >= 1) {
+        lastInputValue = value;
+        debouncedGenerateSuggestions(composeInput, value);
+      } else if (value.trim().length === 0) {
+        hideSuggestion();
+        currentSuggestions = [];
       }
     };
 
-    attachXInputs();
-    const observer = new MutationObserver(() => attachXInputs());
-    observer.observe(document.body, { childList: true, subtree: true });
+    const handleXKeydown = (e) => {
+      const composeInput = resolveXComposeInput(e.target) || currentInput;
+      if (!composeInput || !document.contains(composeInput)) return;
+      if (e.target !== composeInput && !composeInput.contains(e.target)) return;
+
+      currentInput = composeInput;
+      if (e.key === 'Tab' && currentSuggestions.length > 0) {
+        e.preventDefault();
+        acceptSuggestion();
+        return;
+      }
+      if (e.key === 'ArrowDown' && currentSuggestions.length > 1) {
+        e.preventDefault();
+        activeSuggestionIndex = (activeSuggestionIndex + 1) % currentSuggestions.length;
+        updateSuggestionDisplay();
+      }
+      if (e.key === 'ArrowUp' && currentSuggestions.length > 1) {
+        e.preventDefault();
+        activeSuggestionIndex = (activeSuggestionIndex - 1 + currentSuggestions.length) % currentSuggestions.length;
+        updateSuggestionDisplay();
+      }
+      if (e.key === 'Escape') {
+        hideSuggestion();
+        currentSuggestions = [];
+      }
+    };
+
+    document.addEventListener('focusin', handleXFocus, true);
+    document.addEventListener('beforeinput', handleXInput, true);
+    document.addEventListener('input', handleXInput, true);
+    document.addEventListener('keyup', handleXInput, true);
+    document.addEventListener('keydown', handleXKeydown, true);
   }
 
   function createSuggestionOverlay() {
@@ -541,6 +627,9 @@
   function setupInputTracking() {
     document.addEventListener('focusin', (e) => {
       const target = e.target;
+      if (isXHost(window.location.hostname) && resolveXComposeInput(target)) {
+        return;
+      }
       if (isInputElement(target)) {
         currentInput = target;
         lastInputValue = getInputValue(target);
@@ -556,6 +645,23 @@
     }, true);
 
     document.addEventListener('focusout', (e) => {
+      if (!currentInput) return;
+
+      if (isXHost(window.location.hostname)) {
+        const composeRoot = getComposeRoot(currentInput);
+        if (e.target !== currentInput && !currentInput.contains(e.target)) return;
+
+        setTimeout(() => {
+          const active = document.activeElement;
+          if (active && composeRoot?.contains(active)) return;
+          hideSuggestion();
+          currentInput = null;
+          currentSuggestions = [];
+          isAddressBar = false;
+        }, 200);
+        return;
+      }
+
       if (currentInput === e.target) {
         setTimeout(() => {
           hideSuggestion();
@@ -616,7 +722,8 @@
     input.dataset.listenersAttached = 'true';
 
     const inputHandler = () => {
-      if (currentInput !== input) return;
+      if (!document.contains(input)) return;
+      if (currentInput !== input && !input.contains(currentInput)) return;
       const value = getInputValue(input);
       if (value !== lastInputValue && value.trim().length >= 1) {
         lastInputValue = value;
@@ -644,17 +751,6 @@
       input.addEventListener('keyup', inputHandler);
       input.addEventListener('paste', () => setTimeout(inputHandler, 0));
     }
-
-    if (options.isXCompose) {
-      const focusHandler = () => {
-        currentInput = input;
-        lastInputValue = getInputValue(input);
-        clearTimeout(debounceTimer);
-        showSuggestionLoading(input);
-        debounceTimer = setTimeout(() => generateSuggestions(input, getInputValue(input)), 500);
-      };
-      input.addEventListener('focus', focusHandler, true);
-    }
   }
 
   function debouncedGenerateSuggestions(input, value) {
@@ -671,7 +767,10 @@
   }
 
   async function generateSuggestions(input, value) {
+    const generation = suggestionGeneration;
+
     try {
+      if (!document.contains(input)) return;
       if (!extensionEnabled) {
         hideSuggestion();
         currentSuggestions = [];
@@ -716,10 +815,12 @@
 
       // Stale check
       const currentValue = getInputValue(input);
+      if (generation !== suggestionGeneration) return;
       if (currentValue !== value) { console.log('Stale result discarded'); return; }
 
       if (response && response.success) {
         const suggestions = response.suggestions || [];
+        if (generation !== suggestionGeneration) return;
         if (suggestions.length > 0) {
           currentSuggestions = suggestions;
           activeSuggestionIndex = 0;
@@ -748,6 +849,12 @@
     const suggestionText = typeof suggestion === 'string' ? suggestion : suggestion.text;
     if (!suggestionText) return;
 
+    suggestionGeneration++;
+    clearTimeout(debounceTimer);
+    lastInputValue = suggestionText;
+    hideSuggestion();
+    currentSuggestions = [];
+
     if (isXComposeInput(currentInput)) {
       insertXComposeText(currentInput, suggestionText);
     } else {
@@ -758,10 +865,6 @@
         currentInput.dispatchEvent(new Event('textInput', { bubbles: true }));
       }
     }
-
-    lastInputValue = suggestionText;
-    hideSuggestion();
-    currentSuggestions = [];
 
     if (currentInput.setSelectionRange) {
       currentInput.setSelectionRange(suggestionText.length, suggestionText.length);
@@ -809,15 +912,12 @@
 
     if (!suggestionOverlay) return;
 
-    const rect = input.getBoundingClientRect();
-    let top = rect.bottom + window.scrollY + 10;
-    const left = rect.left + window.scrollX;
-    if (isAddressBar) top = rect.bottom + window.scrollY + 14;
+    const { top, left, width } = positionOverlay(input);
 
     suggestionOverlay.style.display = 'block';
     suggestionOverlay.style.left = `${left}px`;
     suggestionOverlay.style.top = `${top}px`;
-    suggestionOverlay.style.width = `${Math.max(rect.width, 320)}px`;
+    suggestionOverlay.style.width = `${width}px`;
     suggestionOverlay.style.transform = '';
 
     // Counter pill
@@ -863,10 +963,7 @@
 
   function showSuggestionLoading(input) {
     if (!suggestionOverlay) return;
-    const rect = input.getBoundingClientRect();
-    let top = rect.bottom + window.scrollY + 10;
-    const left = rect.left + window.scrollX;
-    if (isAddressBar) top = rect.bottom + window.scrollY + 14;
+    const { top, left } = positionOverlay(input);
 
     suggestionOverlay.style.display = 'block';
     suggestionOverlay.style.left = `${left}px`;
