@@ -73,7 +73,51 @@
       input;
   }
 
+  function findReplyButtonNear(input) {
+    const scope =
+      input.closest('[role="dialog"]') ||
+      input.closest('[data-testid="cellInnerDiv"]') ||
+      input.closest('article')?.parentElement ||
+      getComposeRoot(input);
+
+    if (!scope) return null;
+
+    return scope.querySelector('[data-testid="tweetButton"]') ||
+      scope.querySelector('[data-testid="tweetButtonInline"]');
+  }
+
+  function getXOverlayAnchor(input) {
+    const textarea = input.closest('[data-testid*="tweetTextarea"]');
+    const replyBtn = findReplyButtonNear(input);
+
+    if (textarea && replyBtn) {
+      let node = textarea;
+      while (node) {
+        if (node.contains(replyBtn)) return node;
+        node = node.parentElement;
+      }
+      return replyBtn.parentElement || textarea.parentElement || textarea;
+    }
+
+    const labelBlock = input.closest('[data-testid="tweetTextarea_0_label"]')?.parentElement;
+    if (labelBlock) return labelBlock;
+
+    const composeRoot = getComposeRoot(input);
+    return composeRoot?.parentElement || composeRoot || input;
+  }
+
   function positionOverlay(input) {
+    if (isXHost(window.location.hostname) && isXComposeInput(input)) {
+      const anchor = getXOverlayAnchor(input);
+      const anchorRect = anchor.getBoundingClientRect();
+      const inputRect = input.getBoundingClientRect();
+      return {
+        top: anchorRect.bottom + 12,
+        left: inputRect.left,
+        width: Math.max(inputRect.width, 320)
+      };
+    }
+
     const rect = input.getBoundingClientRect();
     return {
       top: isAddressBar ? rect.bottom + 14 : rect.bottom + 10,
