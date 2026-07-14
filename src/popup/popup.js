@@ -52,6 +52,7 @@ async function initialize() {
   try {
     await loadConfig();
     await loadExtensionState();
+    await loadDarkMode();
     setupEventListeners();
 
     if (currentConfig && currentConfig.isConfigured) {
@@ -313,28 +314,50 @@ async function toggleExtension() {
 
 /**
  * dark mode toggle
- *  */ 
+ *  */
 
 const sign = document.getElementById('text');
 const outer = document.getElementById("outerbox");
 const inner = document.getElementById("innerbox");
 const text =document.getElementById("darkmode")
 
+async function loadDarkMode() {
+  try {
+    const stored = await chrome.storage.local.get('darkMode');
+    const isDark = stored.darkMode ?? false;
+    if (isDark) {
+      sign.textContent = "✔";
+      outer.classList.add("active");
+      inner.classList.add("active");
+      document.body.classList.add('dark');
+      text.classList.add("active");
+    } else {
+      sign.textContent = "X";
+      outer.classList.remove("active");
+      inner.classList.remove("active");
+      document.body.classList.remove('dark');
+      text.classList.remove("active");
+    }
+  } catch (error) {
+    console.error('Failed to load dark mode state:', error);
+  }
+}
+
 function changeText() {
   if (sign.textContent == "X") {
     sign.textContent = "✔";
-    outer.classList.toggle("active");
-    inner.classList.toggle("active");
+    outer.classList.add("active");
+    inner.classList.add("active");
     document.body.classList.add('dark');
-    text.classList.toggle("active");
-    
-
+    text.classList.add("active");
+    chrome.storage.local.set({ darkMode: true }).catch(err => console.error(err));
   } else {
     sign.textContent = "X";
-    outer.classList.toggle("active");
-    inner.classList.toggle("active");
+    outer.classList.remove("active");
+    inner.classList.remove("active");
     document.body.classList.remove('dark');
-     text.classList.toggle("active");
+    text.classList.remove("active");
+    chrome.storage.local.set({ darkMode: false }).catch(err => console.error(err));
   }
 }
 
