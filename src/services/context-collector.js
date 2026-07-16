@@ -284,6 +284,10 @@ class ContextCollector {
         return 'search';
       }
 
+      if (url.includes('x.com') || url.includes('twitter.com')) {
+        return 'social_x';
+      }
+
       return 'general';
     } catch (error) {
       console.error('Error detecting page type:', error);

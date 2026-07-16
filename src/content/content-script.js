@@ -2,10 +2,41 @@
  * Enhanced Content Script - Works EVERYWHERE
  * + Smart Form-Fill detection
  * + Session-aware suggestion labels
+ * + X/Twitter reply suggestions from post content
  */
 
 (function() {
   'use strict';
+
+  let xContextApi = null;
+
+  async function loadXContextApi() {
+    if (xContextApi) return xContextApi;
+    try {
+      const moduleUrl = chrome.runtime.getURL('src/services/x-context-extractor.js');
+      xContextApi = await import(moduleUrl);
+    } catch (error) {
+      console.warn('SuggestPilot: failed to load X context module', error);
+      xContextApi = {
+        isXHost: () => false,
+        isXComposeInput: () => false,
+        extractTweetContext: () => null
+      };
+    }
+    return xContextApi;
+  }
+
+  function isXHost(hostname) {
+    return xContextApi?.isXHost?.(hostname) ?? false;
+  }
+
+  function isXComposeInput(element) {
+    return xContextApi?.isXComposeInput?.(element, window.location.hostname) ?? false;
+  }
+
+  function extractTweetContext(input) {
+    return xContextApi?.extractTweetContext?.(input, document) ?? null;
+  }
 
   let currentInput = null;
   let suggestionOverlay = null;
@@ -15,8 +46,86 @@
   let lastInputValue = '';
   let isAddressBar = false;
   let extensionEnabled = true;
+  let lastComposeRoot = null;
+  let suggestionGeneration = 0;
 
-  // Sites where the extension should stay completely silent
+  function resolveXComposeInput(element) {
+    if (!element || !isXHost(window.location.hostname)) return null;
+
+    const textarea = element.closest('[data-testid*="tweetTextarea"]') ||
+      (element.getAttribute('data-testid')?.includes('tweetTextarea') ? element : null);
+
+    if (textarea) {
+      return textarea.querySelector('[contenteditable="true"]') || textarea;
+    }
+
+    if (element.contentEditable === 'true' && element.closest('[role="dialog"], article')) {
+      return element;
+    }
+
+    return isXComposeInput(element) ? element : null;
+  }
+
+  function getComposeRoot(input) {
+    if (!input) return null;
+    return input.closest('[data-testid*="tweetTextarea"]') ||
+      input.closest('[role="dialog"]') ||
+      input;
+  }
+
+  function findReplyButtonNear(input) {
+    const scope =
+      input.closest('[role="dialog"]') ||
+      input.closest('[data-testid="cellInnerDiv"]') ||
+      input.closest('article')?.parentElement ||
+      getComposeRoot(input);
+
+    if (!scope) return null;
+
+    return scope.querySelector('[data-testid="tweetButton"]') ||
+      scope.querySelector('[data-testid="tweetButtonInline"]');
+  }
+
+  function getXOverlayAnchor(input) {
+    const textarea = input.closest('[data-testid*="tweetTextarea"]');
+    const replyBtn = findReplyButtonNear(input);
+
+    if (textarea && replyBtn) {
+      let node = textarea;
+      while (node) {
+        if (node.contains(replyBtn)) return node;
+        node = node.parentElement;
+      }
+      return replyBtn.parentElement || textarea.parentElement || textarea;
+    }
+
+    const labelBlock = input.closest('[data-testid="tweetTextarea_0_label"]')?.parentElement;
+    if (labelBlock) return labelBlock;
+
+    const composeRoot = getComposeRoot(input);
+    return composeRoot?.parentElement || composeRoot || input;
+  }
+
+  function positionOverlay(input) {
+    if (isXHost(window.location.hostname) && isXComposeInput(input)) {
+      const anchor = getXOverlayAnchor(input);
+      const anchorRect = anchor.getBoundingClientRect();
+      const inputRect = input.getBoundingClientRect();
+      return {
+        top: anchorRect.bottom + 12,
+        left: inputRect.left,
+        width: Math.max(inputRect.width, 320)
+      };
+    }
+
+    const rect = input.getBoundingClientRect();
+    return {
+      top: isAddressBar ? rect.bottom + 14 : rect.bottom + 10,
+      left: rect.left,
+      width: Math.max(rect.width, 320)
+    };
+  }
+
   const BLOCKED_DOMAINS = [
     'linkedin.com'
   ];
@@ -382,12 +491,88 @@
       console.log('AI Context Assistant: disabled on', window.location.hostname);
       return;
     }
+    if (/x\.com|twitter\.com/i.test(window.location.hostname)) {
+      await loadXContextApi();
+    }
     await loadExtensionState();
     setupInputTracking();
     setupMessageListener();
     createSuggestionOverlay();
     setupAddressBarDetection();
-    console.log('AI Context Assistant - Session+FormFill mode active');
+    if (isXHost(window.location.hostname)) setupXComposeDelegation();
+    console.log('AI Context Assistant - Session+FormFill+XReply mode active');
+  }
+
+  function setupXComposeDelegation() {
+    const handleXFocus = (e) => {
+      const composeInput = resolveXComposeInput(e.target);
+      if (!composeInput || isSensitiveField(composeInput)) return;
+
+      const composeRoot = getComposeRoot(composeInput);
+      if (composeRoot !== lastComposeRoot) {
+        lastComposeRoot = composeRoot;
+        lastInputValue = '';
+        currentSuggestions = [];
+        hideSuggestion();
+        clearTimeout(debounceTimer);
+      }
+
+      currentInput = composeInput;
+      lastInputValue = getInputValue(composeInput);
+      clearTimeout(debounceTimer);
+      showSuggestionLoading(composeInput);
+      debounceTimer = setTimeout(() => {
+        generateSuggestions(composeInput, getInputValue(composeInput));
+      }, 500);
+    };
+
+    const handleXInput = (e) => {
+      const composeInput = resolveXComposeInput(e.target);
+      if (!composeInput || isSensitiveField(composeInput)) return;
+
+      currentInput = composeInput;
+      const value = getInputValue(composeInput);
+      if (value !== lastInputValue && value.trim().length >= 1) {
+        lastInputValue = value;
+        debouncedGenerateSuggestions(composeInput, value);
+      } else if (value.trim().length === 0) {
+        hideSuggestion();
+        currentSuggestions = [];
+      }
+    };
+
+    const handleXKeydown = (e) => {
+      const composeInput = resolveXComposeInput(e.target) || currentInput;
+      if (!composeInput || !document.contains(composeInput)) return;
+      if (e.target !== composeInput && !composeInput.contains(e.target)) return;
+
+      currentInput = composeInput;
+      if (e.key === 'Tab' && currentSuggestions.length > 0) {
+        e.preventDefault();
+        acceptSuggestion();
+        return;
+      }
+      if (e.key === 'ArrowDown' && currentSuggestions.length > 1) {
+        e.preventDefault();
+        activeSuggestionIndex = (activeSuggestionIndex + 1) % currentSuggestions.length;
+        updateSuggestionDisplay();
+      }
+      if (e.key === 'ArrowUp' && currentSuggestions.length > 1) {
+        e.preventDefault();
+        activeSuggestionIndex = (activeSuggestionIndex - 1 + currentSuggestions.length) % currentSuggestions.length;
+        updateSuggestionDisplay();
+      }
+      if (e.key === 'Escape') {
+        hideSuggestion();
+        currentSuggestions = [];
+      }
+    };
+
+    document.addEventListener('focusin', handleXFocus, true);
+    document.addEventListener('beforeinput', handleXInput, true);
+    document.addEventListener('input', handleXInput, true);
+    document.addEventListener('keyup', handleXInput, true);
+    document.addEventListener('keydown', handleXKeydown, true);
   }
 
   function createSuggestionOverlay() {
@@ -486,6 +671,9 @@
   function setupInputTracking() {
     document.addEventListener('focusin', (e) => {
       const target = e.target;
+      if (isXHost(window.location.hostname) && resolveXComposeInput(target)) {
+        return;
+      }
       if (isInputElement(target)) {
         currentInput = target;
         lastInputValue = getInputValue(target);
@@ -501,6 +689,23 @@
     }, true);
 
     document.addEventListener('focusout', (e) => {
+      if (!currentInput) return;
+
+      if (isXHost(window.location.hostname)) {
+        const composeRoot = getComposeRoot(currentInput);
+        if (e.target !== currentInput && !currentInput.contains(e.target)) return;
+
+        setTimeout(() => {
+          const active = document.activeElement;
+          if (active && composeRoot?.contains(active)) return;
+          hideSuggestion();
+          currentInput = null;
+          currentSuggestions = [];
+          isAddressBar = false;
+        }, 200);
+        return;
+      }
+
       if (currentInput === e.target) {
         setTimeout(() => {
           hideSuggestion();
@@ -556,12 +761,13 @@
     else input.value = value;
   }
 
-  function attachInputListeners(input) {
+  function attachInputListeners(input, options = {}) {
     if (input.dataset.listenersAttached) return;
     input.dataset.listenersAttached = 'true';
 
     const inputHandler = () => {
-      if (currentInput !== input) return;
+      if (!document.contains(input)) return;
+      if (currentInput !== input && !input.contains(currentInput)) return;
       const value = getInputValue(input);
       if (value !== lastInputValue && value.trim().length >= 1) {
         lastInputValue = value;
@@ -582,7 +788,13 @@
 
     input.addEventListener('input', inputHandler);
     input.addEventListener('keydown', keydownHandler);
-    if (input.contentEditable === 'true') input.addEventListener('DOMCharacterDataModified', inputHandler);
+    if (input.contentEditable === 'true') {
+      input.addEventListener('DOMCharacterDataModified', inputHandler);
+      // Draft.js / Lexical on X often emit beforeinput instead of input
+      input.addEventListener('beforeinput', inputHandler);
+      input.addEventListener('keyup', inputHandler);
+      input.addEventListener('paste', () => setTimeout(inputHandler, 0));
+    }
   }
 
   function debouncedGenerateSuggestions(input, value) {
@@ -593,24 +805,37 @@
       return;
     }
     showSuggestionLoading(input);
-    const delay = isAddressBar ? 400 : 500;
+    const onX = isXHost(window.location.hostname);
+    const delay = isAddressBar ? 400 : onX ? 400 : 500;
     debounceTimer = setTimeout(() => generateSuggestions(input, value), delay);
   }
 
   async function generateSuggestions(input, value) {
+    const generation = suggestionGeneration;
+
     try {
+      if (!document.contains(input)) return;
       if (!extensionEnabled) {
         hideSuggestion();
         currentSuggestions = [];
         return;
       }
 
+      if (isXHost(window.location.hostname) && !xContextApi) {
+        await loadXContextApi();
+      }
+
       // Build form field metadata from the focused element
       const fieldMeta = buildFieldMeta(input);
+
+      const onX = isXHost(window.location.hostname);
+      const isXCompose = onX && isXComposeInput(input);
+      const postContext = onX ? extractTweetContext(input) : null;
 
       const pageContext = {
         active_input_text: value,
         page_type: detectPageType(),
+        postContext,
         current_page: {
           title: document.title,
           url: window.location.href,
@@ -618,6 +843,7 @@
             .slice(0, 5).map(h => h.textContent.trim()).filter(Boolean)
         },
         is_address_bar: isAddressBar,
+        is_x_compose: isXCompose,
         is_ai_chat: window.location.href.includes('claude.ai') || window.location.href.includes('chat.openai.com')
       };
 
@@ -633,14 +859,16 @@
 
       // Stale check
       const currentValue = getInputValue(input);
+      if (generation !== suggestionGeneration) return;
       if (currentValue !== value) { console.log('Stale result discarded'); return; }
 
       if (response && response.success) {
         const suggestions = response.suggestions || [];
+        if (generation !== suggestionGeneration) return;
         if (suggestions.length > 0) {
           currentSuggestions = suggestions;
           activeSuggestionIndex = 0;
-          showSuggestion(input, currentSuggestions[0], response.reason, response.isFormFill);
+          showSuggestion(input, currentSuggestions[0], response.reason, response.isFormFill, response.isSocialReply);
         } else {
           hideSuggestion();
           currentSuggestions = [];
@@ -648,6 +876,9 @@
       } else {
         hideSuggestion();
         currentSuggestions = [];
+        if (response?.error) {
+          console.warn('SuggestPilot:', response.error);
+        }
       }
     } catch (error) {
       console.error('Failed to generate suggestions:', error);
@@ -662,14 +893,22 @@
     const suggestionText = typeof suggestion === 'string' ? suggestion : suggestion.text;
     if (!suggestionText) return;
 
-    setInputValue(currentInput, suggestionText);
-    currentInput.dispatchEvent(new Event('input', { bubbles: true }));
-    currentInput.dispatchEvent(new Event('change', { bubbles: true }));
-    if (currentInput.contentEditable === 'true') currentInput.dispatchEvent(new Event('textInput', { bubbles: true }));
-
+    suggestionGeneration++;
+    clearTimeout(debounceTimer);
     lastInputValue = suggestionText;
     hideSuggestion();
     currentSuggestions = [];
+
+    if (isXComposeInput(currentInput)) {
+      insertXComposeText(currentInput, suggestionText);
+    } else {
+      setInputValue(currentInput, suggestionText);
+      currentInput.dispatchEvent(new Event('input', { bubbles: true }));
+      currentInput.dispatchEvent(new Event('change', { bubbles: true }));
+      if (currentInput.contentEditable === 'true') {
+        currentInput.dispatchEvent(new Event('textInput', { bubbles: true }));
+      }
+    }
 
     if (currentInput.setSelectionRange) {
       currentInput.setSelectionRange(suggestionText.length, suggestionText.length);
@@ -683,23 +922,47 @@
     }
   }
 
+  function insertXComposeText(element, text) {
+    element.focus();
+    const existing = getInputValue(element);
+    if (existing) {
+      const selection = window.getSelection();
+      if (selection && selection.rangeCount > 0) {
+        selection.deleteFromDocument();
+      }
+    }
+    const inserted = document.execCommand('insertText', false, text);
+    if (!inserted) {
+      setInputValue(element, text);
+      element.dispatchEvent(new InputEvent('beforeinput', {
+        bubbles: true,
+        cancelable: true,
+        inputType: 'insertText',
+        data: text
+      }));
+      element.dispatchEvent(new InputEvent('input', {
+        bubbles: true,
+        inputType: 'insertText',
+        data: text
+      }));
+    }
+  }
+
   // ── Display ────────────────────────────────────────────────────────────────
 
-  function showSuggestion(input, suggestionData, reason = '', isFormFill = false) {
+  function showSuggestion(input, suggestionData, reason = '', isFormFill = false, isSocialReply = false) {
     const text = typeof suggestionData === 'string' ? suggestionData : suggestionData.text;
     const derivation = typeof suggestionData === 'object' ? suggestionData.derivation : null;
 
     if (!suggestionOverlay) return;
 
-    const rect = input.getBoundingClientRect();
-    let top = rect.bottom + window.scrollY + 10;
-    const left = rect.left + window.scrollX;
-    if (isAddressBar) top = rect.bottom + window.scrollY + 14;
+    const { top, left, width } = positionOverlay(input);
 
     suggestionOverlay.style.display = 'block';
     suggestionOverlay.style.left = `${left}px`;
     suggestionOverlay.style.top = `${top}px`;
-    suggestionOverlay.style.width = `${Math.max(rect.width, 320)}px`;
+    suggestionOverlay.style.width = `${width}px`;
+    suggestionOverlay.style.transform = '';
 
     // Counter pill
     const counter = currentSuggestions.length > 1
@@ -710,6 +973,8 @@
     let badge = '';
     if (isFormFill) {
       badge = `<span class="ai-form-fill-badge">⚡ Smart Fill</span>`;
+    } else if (isSocialReply) {
+      badge = `<span style="background:rgba(29,155,240,0.18);border:1px solid rgba(29,155,240,0.35);border-radius:20px;padding:1px 8px;font-size:10px;font-weight:600;color:rgba(120,200,255,0.95);letter-spacing:0.04em;">🐦 X Reply</span>`;
     } else {
       // Check if derivation references session thread
       const isSessionBased = derivation?.toLowerCase().includes('session') ||
@@ -742,14 +1007,12 @@
 
   function showSuggestionLoading(input) {
     if (!suggestionOverlay) return;
-    const rect = input.getBoundingClientRect();
-    let top = rect.bottom + window.scrollY + 10;
-    const left = rect.left + window.scrollX;
-    if (isAddressBar) top = rect.bottom + window.scrollY + 14;
+    const { top, left } = positionOverlay(input);
 
     suggestionOverlay.style.display = 'block';
     suggestionOverlay.style.left = `${left}px`;
     suggestionOverlay.style.top = `${top}px`;
+    suggestionOverlay.style.transform = '';
     suggestionOverlay.innerHTML = `
       <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:rgba(255,255,255,0.55);font-weight:400;">
         <span style="display:inline-flex;gap:3px;align-items:center;">
@@ -779,6 +1042,7 @@
 
   function detectPageType() {
     const url = window.location.href.toLowerCase();
+    if (isXHost(window.location.hostname)) return 'social_x';
     if (url.includes('chat.openai.com') || url.includes('claude.ai') || url.includes('gemini.google.com') || url.includes('copilot.microsoft.com')) return 'ai_chat';
     if (url.includes('github.com') || url.includes('stackoverflow.com')) return 'coding';
     if (url.includes('google.com/search') || url.includes('bing.com/search')) return 'search';
@@ -870,3 +1134,4 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => initialize());
   else initialize();
 })();
+

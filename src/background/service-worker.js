@@ -103,6 +103,7 @@ async function generateSuggestions(data) {
       ...fullContext,
       active_input_text: data.context?.active_input_text || fullContext.active_input_text,
       page_type: data.context?.page_type || fullContext.page_type,
+      postContext: data.context?.postContext || null,
       current_page: { ...fullContext.current_page, ...(data.context?.current_page || {}) },
       sessionIntent: await sessionTracker.getIntentContext()
     };
