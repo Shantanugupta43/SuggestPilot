@@ -52,6 +52,7 @@ async function initialize() {
   try {
     await loadConfig();
     await loadExtensionState();
+    await loadDarkMode();
     setupEventListeners();
 
     if (currentConfig && currentConfig.isConfigured) {
@@ -102,6 +103,22 @@ async function loadExtensionState() {
     updateToggleStatus();
   } catch (error) {
     console.error('Failed to load extension state:', error);
+  }
+}
+
+async function loadDarkMode() {
+  try {
+    const stored = await chrome.storage.local.get('darkMode');
+
+    if (stored.darkMode) {
+      document.body.classList.add('dark');
+      sign.textContent = "✔";
+      outer.classList.add("active");
+      inner.classList.add("active");
+      text.classList.add("active");
+    }
+  } catch (error) {
+    console.error('Failed to load dark mode:', error);
   }
 }
 
@@ -320,21 +337,22 @@ const outer = document.getElementById("outerbox");
 const inner = document.getElementById("innerbox");
 const text =document.getElementById("darkmode")
 
-function changeText() {
+async function changeText() {
   if (sign.textContent == "X") {
     sign.textContent = "✔";
     outer.classList.toggle("active");
     inner.classList.toggle("active");
     document.body.classList.add('dark');
-    text.classList.toggle("active");
-    
+    await chrome.storage.local.set({ darkMode: true });
+    text.classList.toggle("active");    
 
   } else {
-    sign.textContent = "X";
-    outer.classList.toggle("active");
-    inner.classList.toggle("active");
-    document.body.classList.remove('dark');
-     text.classList.toggle("active");
+      sign.textContent = "X";
+      outer.classList.toggle("active");
+      inner.classList.toggle("active");
+      document.body.classList.remove('dark');
+      await chrome.storage.local.set({ darkMode: false });
+      text.classList.toggle("active");
   }
 }
 
