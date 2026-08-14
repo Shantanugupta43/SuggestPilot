@@ -40,7 +40,8 @@ class GroqService {
       console.log('Session intent:', context.sessionIntent?.sessionSummary || 'none');
       console.log('Form field:', context.fieldMeta?.fieldType || 'none');
 
-      const result = await this.callWithRetry(apiKey, prompt, systemPrompt);
+      const model = configManager.get('model') || 'llama-3.1-8b-instant';
+      const result = await this.callWithRetry(apiKey, prompt, systemPrompt, model);
       return context.fieldMeta?.fieldType
         ? { ...result, isFormFill: true }
         : result;
@@ -66,7 +67,7 @@ class GroqService {
     };
   }
 
-  async callWithRetry(apiKey, prompt, systemPrompt, attempt = 0) {
+  async callWithRetry(apiKey, prompt, systemPrompt, model, attempt = 0) {
     const response = await fetch(`${this.baseURL}/chat/completions`, {
       method: 'POST',
       headers: {
@@ -74,7 +75,7 @@ class GroqService {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: this.model,
+        model,
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: prompt }
@@ -89,7 +90,7 @@ class GroqService {
       const retryAfter = parseFloat(response.headers.get('retry-after') || '2');
       console.warn(`Rate limited, retrying in ${retryAfter}s...`);
       await new Promise(r => setTimeout(r, retryAfter * 1000));
-      return this.callWithRetry(apiKey, prompt, systemPrompt, 1);
+      return this.callWithRetry(apiKey, prompt, systemPrompt, model, 1);
     }
 
     if (!response.ok) {
@@ -316,6 +317,7 @@ Format:
   async testConnection() {
     try {
       const apiKey = configManager.getApiKey();
+      const model = configManager.get('model') || 'llama-3.1-8b-instant';
       const response = await fetch(`${this.baseURL}/chat/completions`, {
         method: 'POST',
         headers: {
@@ -323,7 +325,7 @@ Format:
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          model: this.model,
+          model,
           messages: [
             { role: 'system', content: 'Respond with only: {"status": "ok"}' },
             { role: 'user', content: 'test' }
