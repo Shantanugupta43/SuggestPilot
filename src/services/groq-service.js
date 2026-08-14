@@ -5,16 +5,26 @@
  */
 
 import configManager from '../config/config-manager.js';
+import RateLimiter from '../utils/rate-limiter.js';
 
 class GroqService {
   constructor() {
     this.baseURL = 'https://api.groq.com/openai/v1';
     this.model = 'llama-3.1-8b-instant';
+    this.rateLimiter = new RateLimiter();
   }
 
   async generateSuggestions(context) {
     try {
       const apiKey = configManager.getApiKey();
+
+      if (!this.rateLimiter.checkLimit()) {
+        return {
+          success: true,
+          reason: 'Rate limited',
+          suggestions: []
+        };
+      }
 
       // ── Form-fill mode:
       const skipAiTypes = new Set(['os', 'browser', 'linkedin_url', 'github_url', 'version']);
@@ -39,6 +49,14 @@ class GroqService {
       console.log('Generating for:', context.active_input_text);
       console.log('Session intent:', context.sessionIntent?.sessionSummary || 'none');
       console.log('Form field:', context.fieldMeta?.fieldType || 'none');
+
+      if (!this.rateLimiter.checkLimit()) {
+        return {
+          success: true,
+          reason: 'Rate limited',
+          suggestions: []
+        };
+      }
 
       const result = await this.callWithRetry(apiKey, prompt, systemPrompt);
       return context.fieldMeta?.fieldType
