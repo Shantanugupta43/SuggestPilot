@@ -1,11 +1,9 @@
 {
-  "name": "ai-context-assistant",
+  "name": "suggestpilot",
   "version": "1.0.0",
   "description": "Intelligent browser extension that provides context-aware suggestions using AI",
   "type": "module",
   "scripts": {
-    "build": "node scripts/build.js",
-    "watch": "node scripts/watch.js",
     "test": "jest",
     "lint": "eslint src/**/*.js",
     "format": "prettier --write \"src/**/*.{js,html,css}\"",
@@ -14,28 +12,24 @@
   "keywords": [
     "browser-extension",
     "ai",
-    "openai",
+    "groq",
     "productivity",
     "context-aware"
   ],
-  "author": "Your Name",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/ai-context-assistant.git"
+    "url": "git+https://github.com/Shantanugupta43/SuggestPilot.git"
   },
   "bugs": {
-    "url": "https://github.com/yourusername/ai-context-assistant/issues"
+    "url": "https://github.com/Shantanugupta43/SuggestPilot/issues"
   },
-  "homepage": "https://github.com/yourusername/ai-context-assistant#readme",
+  "homepage": "https://github.com/Shantanugupta43/SuggestPilot#readme",
   "devDependencies": {
     "@babel/core": "^7.24.0",
     "@babel/preset-env": "^7.24.0",
     "eslint": "^8.57.0",
     "jest": "^29.7.0",
     "prettier": "^3.2.5"
-  },
-  "dependencies": {
-    "openai": "^4.28.0"
   }
 }
